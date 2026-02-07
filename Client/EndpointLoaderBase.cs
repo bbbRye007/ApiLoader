@@ -2,7 +2,6 @@ using Azure.Storage.Blobs;
 using Canal.Ingestion.ApiLoader.Engine.Adapters;
 using System.Diagnostics.CodeAnalysis;
 using Canal.Ingestion.ApiLoader.Model;
-using Canal.Ingestion.ApiLoader.Engine;
 using Canal.Storage.Adls;
 using System.Text.Json;
 
@@ -11,7 +10,7 @@ public abstract class EndpointLoaderBase
 {
 
     [SetsRequiredMembers]
-    public EndpointLoaderBase(IVendorAdapter vendorAdapter, BlobContainerClient containerClient, string environmentName, int maxDegreeOfParallelism, int maxRetries, int minRetryDelayMs) 
+    public EndpointLoaderBase(IVendorAdapter vendorAdapter, BlobContainerClient containerClient, string environmentName, int maxDegreeOfParallelism, int maxRetries, int minRetryDelayMs)
     {
         VendorAdapter = vendorAdapter;
         ContainerClient = containerClient;
@@ -26,24 +25,24 @@ public abstract class EndpointLoaderBase
     protected int MaxDegreeOfParallelism { get; init; }
     protected int MaxRetries { get; init; }
     protected int MinRetryDelayMs { get; init; }
-    
-    internal IEndpoint? EndpointInfo { get; private set; } = null;
+
+    internal EndpointDefinition? Definition { get; private set; } = null;
     public string IngestionDomain => VendorAdapter?.IngestionDomain ?? string.Empty;
     public string VendorName => VendorAdapter?.VendorName ?? string.Empty;
     public bool IsExternalSource => VendorAdapter?.IsExternalSource ?? true;
-    public string ResourceName => EndpointInfo?.ResourceName ?? string.Empty;
-    public int ResourceVersion => EndpointInfo?.ResourceVersion ?? 0;
+    public string ResourceName => Definition?.ResourceName ?? string.Empty;
+    public int ResourceVersion => Definition?.ResourceVersion ?? 0;
     public IngestionRun? IngestionRun { get; protected set; }
-    
-    internal void InitRun(IEndpoint endpoint) 
-    { 
+
+    internal void InitRun(EndpointDefinition definition)
+    {
         IngestionRun = new(EnvironmentName, IngestionDomain, VendorName);
-        EndpointInfo = endpoint;
-    }    
-    
+        Definition = definition;
+    }
+
     public async Task SaveResultsAsync(List<FetchResult> fetchResults, CancellationToken cancellationToken)
     {
-        foreach (var r in fetchResults) 
+        foreach (var r in fetchResults)
             await ADLSWriter.SavePayloadAndMetadata(
             container: ContainerClient,
             environmentName: r.IngestionRun.EnvironmentName,
@@ -58,23 +57,22 @@ public abstract class EndpointLoaderBase
             contentJson: r.Content ?? string.Empty,
             metaDataJson: r.MetaDataJson,
             cancellationToken: cancellationToken
-            ).ConfigureAwait(false); 
+            ).ConfigureAwait(false);
     }
 
     public async Task SaveWatermarkAsync(string watermarkJson, CancellationToken cancellationToken)
     {
         await ADLSWriter.SaveWatermark(ContainerClient, EnvironmentName, IsExternalSource, IngestionDomain, VendorName, ResourceName, ResourceVersion, watermarkJson, cancellationToken)
-                        .ConfigureAwait(false);   
-    } 
+                        .ConfigureAwait(false);
+    }
 
     public async Task<JsonDocument?> LoadWatermarkAsync(CancellationToken cancellationToken)
     {
         string watermarkPath = ADLSBlobNamer.GetBlobName(BlobCategory.Watermark, EnvironmentName, IsExternalSource, IngestionDomain, VendorName, ResourceName, ResourceVersion);
 
         var watermarkJson = await ADLSReader.GetBlobAsJsonAsync(ContainerClient, watermarkPath, cancellationToken).ConfigureAwait(false);
-        
-        return watermarkJson;
-    } 
-  
-}
 
+        return watermarkJson;
+    }
+
+}
