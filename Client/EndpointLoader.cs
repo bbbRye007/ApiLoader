@@ -22,7 +22,7 @@ public class EndpointLoader : EndpointLoaderBase
 
     public async Task<List<FetchResult>> Load(
         List<FetchResult>? priorResults = null, DateTimeOffset? overrideStartUtc = null, DateTimeOffset? overrideEndUtc = null,
-        int? pageSize = null, int? maxNrPagesBeforeAbort = null, bool saveResults = true, bool saveWatermark = true,
+        int? pageSize = null, int? maxNrPagesBeforeAbort = null, SaveBehavior saveBehavior = SaveBehavior.AfterAll, bool saveWatermark = true,
         string bodyParamsJson = "{}", CancellationToken cancellationToken = default)
     {
         InitRun(_definition);
@@ -48,11 +48,16 @@ public class EndpointLoader : EndpointLoaderBase
         // The endpoint definition knows how to build its own requests
         var requests = _definition.BuildRequests(VendorAdapter, _definition, pagination, parameters);
 
-        var results = (requests.Count == 1)
-            ? await Fetcher.ProcessRequest(IngestionRun!, requests[0], cancellationToken: cancellationToken).ConfigureAwait(false)
-            : await Fetcher.ProcessRequests(IngestionRun!, requests, cancellationToken).ConfigureAwait(false);
+        // When saving per-page, wire up a callback so the engine persists each page as it arrives.
+        Func<FetchResult, Task>? onPageFetched = saveBehavior == SaveBehavior.PerPage
+            ? async result => await SaveResultAsync(result, cancellationToken).ConfigureAwait(false)
+            : null;
 
-        if (saveResults) await SaveResultsAsync(results, cancellationToken).ConfigureAwait(false);
+        var results = (requests.Count == 1)
+            ? await Fetcher.ProcessRequest(IngestionRun!, requests[0], onPageFetched, cancellationToken).ConfigureAwait(false)
+            : await Fetcher.ProcessRequests(IngestionRun!, requests, onPageFetched, cancellationToken).ConfigureAwait(false);
+
+        if (saveBehavior == SaveBehavior.AfterAll) await SaveResultsAsync(results, cancellationToken).ConfigureAwait(false);
         if (saveWatermark && _definition.SupportsWatermark) await GenerateWatermarkAndSaveAsync(startUtc!.Value, endUtc!.Value, cancellationToken).ConfigureAwait(false);
 
         return results;

@@ -43,7 +43,12 @@ public abstract class EndpointLoaderBase
     public async Task SaveResultsAsync(List<FetchResult> fetchResults, CancellationToken cancellationToken)
     {
         foreach (var r in fetchResults)
-            await ADLSWriter.SavePayloadAndMetadata(
+            await SaveResultAsync(r, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task SaveResultAsync(FetchResult r, CancellationToken cancellationToken)
+    {
+        await ADLSWriter.SavePayloadAndMetadata(
             container: ContainerClient,
             environmentName: r.IngestionRun.EnvironmentName,
             dataSourceIsExternal: IsExternalSource,
@@ -57,7 +62,7 @@ public abstract class EndpointLoaderBase
             contentJson: r.Content ?? string.Empty,
             metaDataJson: r.MetaDataJson,
             cancellationToken: cancellationToken
-            ).ConfigureAwait(false);
+        ).ConfigureAwait(false);
     }
 
     public async Task SaveWatermarkAsync(string watermarkJson, CancellationToken cancellationToken)

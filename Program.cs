@@ -66,6 +66,7 @@ using Canal.Ingestion.ApiLoader.Adapters.TruckerCloud;
 using Canal.Ingestion.ApiLoader.Engine.Adapters.TruckerCloud;
 using Canal.Ingestion.ApiLoader.Engine.Adapters.Fmcsa;
 using Canal.Ingestion.ApiLoader.Client;
+using Canal.Ingestion.ApiLoader.Model;
 
 using Microsoft.Extensions.Configuration;
 // TODO: Remove config files containing "secrets" - these should be managed with Azure Key Vault
@@ -171,12 +172,12 @@ using Microsoft.Extensions.Configuration;
     // For ONE Vehicle the result was a json document 900K lines long! No date parameters to filter by!
 
     // carriers is a required input for dependent endpoints. fetch it first, then pass results as priorResults.
-    var carriers = await tc.Create(TruckerCloudEndpoints.Carriers).Load(cancellationToken: cts.Token, saveResults: false, saveWatermark: false);
+    var carriers = await tc.Create(TruckerCloudEndpoints.Carriers).Load(cancellationToken: cts.Token, saveBehavior: SaveBehavior.None, saveWatermark: false);
     Console.WriteLine(carriers[0].Content);
     // await tc.Create(TruckerCloudEndpoints.SafetyEvents).Load(priorResults: carriers, overrideStartUtc: DateTimeOffset.Now.AddDays(-30), overrideEndUtc: DateTimeOffset.Now.AddDays(-5), saveWatermark: true, cancellationToken: cts.Token);
     // await tc.Create(TruckerCloudEndpoints.SafetyEvents).Load(priorResults: carriers, cancellationToken: cts.Token);
 
-    // var vehicles = await tc.Create(TruckerCloudEndpoints.Vehicles).Load(cancellationToken: cts.Token, saveResults: false);
+    // var vehicles = await tc.Create(TruckerCloudEndpoints.Vehicles).Load(cancellationToken: cts.Token, saveBehavior: SaveBehavior.None);
 
     // THIS ENDPOINT IS A SLOOOOW!!! FOR ONE out of almost 1000 vehicles...
 

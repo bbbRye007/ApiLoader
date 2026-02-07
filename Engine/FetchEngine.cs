@@ -44,21 +44,21 @@ public sealed class FetchEngine
 
     public static string NewIdentifier => Guid.NewGuid().ToString("N");
 
-    public async Task<List<FetchResult>> ProcessRequests(IngestionRun ingestionRun, List<Request> requests, CancellationToken cancellationToken = default)
+    public async Task<List<FetchResult>> ProcessRequests(IngestionRun ingestionRun, List<Request> requests, Func<FetchResult, Task>? onPageFetched = null, CancellationToken cancellationToken = default)
     {
         var bag = new ConcurrentBag<FetchResult>();
         var options = new ParallelOptions { CancellationToken = cancellationToken, MaxDegreeOfParallelism = MaxDegreeOfParallelism };
 
         await Parallel.ForEachAsync(requests, options, async (request, ct) =>
         {
-            var records = await ProcessRequest(ingestionRun, request, ct).ConfigureAwait(false);
+            var records = await ProcessRequest(ingestionRun, request, onPageFetched, ct).ConfigureAwait(false);
             foreach (var r in records) bag.Add(r);
         }).ConfigureAwait(false);
 
         return bag.ToList();
     }
 
-    public async Task<List<FetchResult>> ProcessRequest(IngestionRun ingestionRun, Request seedRequest, CancellationToken cancellationToken = default)
+    public async Task<List<FetchResult>> ProcessRequest(IngestionRun ingestionRun, Request seedRequest, Func<FetchResult, Task>? onPageFetched = null, CancellationToken cancellationToken = default)
     {
         var results = new List<FetchResult>();
         FetchResult? previous = null;
@@ -73,6 +73,9 @@ public sealed class FetchEngine
             var result = await PerformFetch(ingestionRun, nextRequest, cancellationToken).ConfigureAwait(false);
             results.Add(result);
             previous = result;
+
+            if (result.FetchSucceeded && onPageFetched is not null)
+                await onPageFetched(result).ConfigureAwait(false);
 
             if (!result.FetchSucceeded) break;
         }
