@@ -54,7 +54,7 @@ public static class TruckerCloudEndpoints
     {
         ResourceName = "safety-events", FriendlyName = "SafetyEvents", ResourceVersion = 5,
         HttpMethod = HttpMethod.Post, SupportsWatermark = true,
-        BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEldNoMotive, startParamName: "startTime", endParamName: "endTime", timeFormat: "yyyy-MM-dd'T'HH:mm:ss.fff'Z'")
+        BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld, startParamName: "startTime", endParamName: "endTime", timeFormat: "yyyy-MM-dd'T'HH:mm:ss.fff'Z'")
     };
 
     public static readonly EndpointDefinition RadiusOfOperation = new()
@@ -85,9 +85,6 @@ public static class TruckerCloudEndpoints
 
     private static List<Dictionary<string, string>> ExtractCarrierCodesAndEld(List<FetchResult> carriers)
         => List_CarrierCodesAndEldVendors.FromList(carriers).Select(c => new Dictionary<string, string> { ["carrierCode"] = c.CarrierCode, ["codeType"] = c.CarrierCodeType, ["eldVendor"] = c.EldVendor }).ToList();
-
-    private static List<Dictionary<string, string>> ExtractCarrierCodesAndEldNoMotive(List<FetchResult> carriers)
-        => List_CarrierCodesAndEldVendors.FromList(carriers).Where(c => c.EldVendor != "Motive").OrderBy(o => o.EldVendor).Select(c => new Dictionary<string, string> { ["carrierCode"] = c.CarrierCode, ["codeType"] = c.CarrierCodeType, ["eldVendor"] = c.EldVendor }).ToList();
 
     /// <summary>GpsMiles and ZipCodeMiles use different query parameter key names than other carrier+eld endpoints.</summary>
     private static List<Dictionary<string, string>> ExtractCarrierCodesAndEldGpsMilesKeys(List<FetchResult> carriers)

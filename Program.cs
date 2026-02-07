@@ -171,8 +171,9 @@ using Microsoft.Extensions.Configuration;
     // For ONE Vehicle the result was a json document 900K lines long! No date parameters to filter by!
 
     // carriers is a required input for dependent endpoints. fetch it first, then pass results as priorResults.
-    var carriers = await tc.Create(TruckerCloudEndpoints.Carriers).Load(cancellationToken: cts.Token);
-    await tc.Create(TruckerCloudEndpoints.SafetyEvents).Load(priorResults: carriers, overrideStartUtc: DateTimeOffset.Now.AddDays(-30), overrideEndUtc: DateTimeOffset.Now.AddDays(-5), saveWatermark: true, cancellationToken: cts.Token);
+    var carriers = await tc.Create(TruckerCloudEndpoints.Carriers).Load(cancellationToken: cts.Token, saveResults: false, saveWatermark: false);
+    Console.WriteLine(carriers[0].Content);
+    // await tc.Create(TruckerCloudEndpoints.SafetyEvents).Load(priorResults: carriers, overrideStartUtc: DateTimeOffset.Now.AddDays(-30), overrideEndUtc: DateTimeOffset.Now.AddDays(-5), saveWatermark: true, cancellationToken: cts.Token);
     // await tc.Create(TruckerCloudEndpoints.SafetyEvents).Load(priorResults: carriers, cancellationToken: cts.Token);
 
     // var vehicles = await tc.Create(TruckerCloudEndpoints.Vehicles).Load(cancellationToken: cts.Token, saveResults: false);
