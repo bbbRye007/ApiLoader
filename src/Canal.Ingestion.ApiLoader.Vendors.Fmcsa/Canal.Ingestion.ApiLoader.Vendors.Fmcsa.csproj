@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>FMCSA vendor adapter for the Canal API ingestion framework. Provides Socrata-style pagination and endpoint catalog for the Federal Motor Carrier Safety Administration public datasets.</Description>
+    <PackageId>Canal.Ingestion.ApiLoader.Vendors.Fmcsa</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Canal.Ingestion.ApiLoader\Canal.Ingestion.ApiLoader.csproj" />
+  </ItemGroup>
+
+</Project>

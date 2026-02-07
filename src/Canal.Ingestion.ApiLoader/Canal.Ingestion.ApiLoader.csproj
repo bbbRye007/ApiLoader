@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Core API ingestion framework for the Canal platform. Defines vendor adapter contracts, fetch engine, request builders, and client orchestration. Vendor-specific implementations live in separate Canal.Ingestion.ApiLoader.Vendors.* packages.</Description>
+    <PackageId>Canal.Ingestion.ApiLoader</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Canal.Storage.Adls\Canal.Storage.Adls.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.25.0" />
+  </ItemGroup>
+
+</Project>

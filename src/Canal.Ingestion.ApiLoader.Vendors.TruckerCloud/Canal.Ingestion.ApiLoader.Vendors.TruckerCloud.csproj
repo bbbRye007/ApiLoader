@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>TruckerCloud vendor adapter for the Canal API ingestion framework. Provides authentication, pagination, endpoint catalog, and response interpretation for the TruckerCloud telematics API.</Description>
+    <PackageId>Canal.Ingestion.ApiLoader.Vendors.TruckerCloud</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Canal.Ingestion.ApiLoader\Canal.Ingestion.ApiLoader.csproj" />
+  </ItemGroup>
+
+</Project>
