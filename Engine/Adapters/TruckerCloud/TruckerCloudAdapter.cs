@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Http.Headers;
@@ -6,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using Canal.Ingestion.ApiLoader.Engine.Adapters;
 using Canal.Ingestion.ApiLoader.Model;
+using Microsoft.Extensions.Logging;
 
 namespace Canal.Ingestion.ApiLoader.Adapters.TruckerCloud;
 
@@ -13,7 +13,7 @@ namespace Canal.Ingestion.ApiLoader.Adapters.TruckerCloud;
 /// TruckerCloud-specific adapter: applies auth + headers, and owns paging logic
 /// </summary>
 /// <remarks>
-/// - Caches auth tokens per API version with concurrency gates (not 100% sure if this is overkill but it works).
+/// - Caches a single auth token (TruckerCloud uses one token across all API versions).
 /// - Defines what gets Redacted in metadata (no secrets allowed in metadata).
 /// - Extracts pagination counters from the JSON response body.
 /// </remarks>
@@ -24,10 +24,11 @@ internal sealed class TruckerCloudAdapter : VendorAdapterBase, IVendorAdapter
     private const string VendorNameConst = "TruckerCloud";
     private const string IngestionDomainConst = "Telematics";
     public const string BaseUrlConst = "https://api.truckercloud.com/api/";
+    private const int AuthApiVersion = 4;
     public override string IngestionDomain => IngestionDomainConst;
     public override string VendorName => VendorNameConst;
     public override string BaseUrl => HttpClient?.BaseAddress?.ToString().TrimEnd('/') ?? string.Empty;
-    
+
     // "External" meaning: the source system is outside Canal's control.
     public override bool IsExternalSource { get; } = true;
 
@@ -40,25 +41,22 @@ internal sealed class TruckerCloudAdapter : VendorAdapterBase, IVendorAdapter
 
     private readonly string _apiUserName;
     private readonly string _apiPassword;
+    private readonly ILogger<TruckerCloudAdapter> _logger;
 
     #endregion
 
     #region Auth Token Cache
 
-    private readonly ConcurrentDictionary<int, string> _authTokens = new();
-    private readonly ConcurrentDictionary<int, SemaphoreSlim> _authLocks = new();
-
-    // When we see a 401, mark that API version token as invalid so the next call forces refresh.
-    private readonly ConcurrentDictionary<int, bool> _credentialInvalid = new();
-
-    private sealed record AuthRequest(string userName, string password);
+    private string? _authToken;
+    private bool _credentialInvalid;
+    private readonly SemaphoreSlim _authLock = new(1, 1);
 
     #endregion
 
     #region Construction
 
     [SetsRequiredMembers]
-    public TruckerCloudAdapter(HttpClient httpClient, string apiUserName, string apiPassword)
+    public TruckerCloudAdapter(HttpClient httpClient, string apiUserName, string apiPassword, ILogger<TruckerCloudAdapter> logger)
         : base(httpClient)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(apiUserName, nameof(apiUserName));
@@ -67,6 +65,7 @@ internal sealed class TruckerCloudAdapter : VendorAdapterBase, IVendorAdapter
         HttpClient.BaseAddress = new Uri(BaseUrlConst.TrimEnd('/') + "/");
         _apiUserName = apiUserName;
         _apiPassword = apiPassword;
+        _logger = logger;
 
         // These should NOT affect the request identity (same "logical request" across pages).
         HeadersToExcludeFromPayloadIdentifers.Add(AuthorizationHeaderName);
@@ -84,7 +83,7 @@ internal sealed class TruckerCloudAdapter : VendorAdapterBase, IVendorAdapter
         httpRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*"));
 
 
-        var authValue = await GetAuthorizationHeaderAsync(request.ResourceVersion, cancellationToken).ConfigureAwait(false);
+        var authValue = await GetAuthorizationHeaderAsync(cancellationToken).ConfigureAwait(false);
         if (!string.IsNullOrWhiteSpace(authValue))
             httpRequest.Headers.TryAddWithoutValidation("Authorization", authValue);
 
@@ -120,7 +119,8 @@ internal sealed class TruckerCloudAdapter : VendorAdapterBase, IVendorAdapter
         // If TruckerCloud says 401, our cached token is wrong (or expired).
         if (statusCode == HttpStatusCode.Unauthorized)
         {
-            _credentialInvalid[request.ResourceVersion] = true;
+            _credentialInvalid = true;
+            _logger.LogWarning("Received 401 for {Endpoint} v{Version}, marking auth token as invalid for refresh", request.ResourceName, request.ResourceVersion);
             return FetchStatus.RetryImmediately;
         }
 
@@ -131,15 +131,24 @@ internal sealed class TruckerCloudAdapter : VendorAdapterBase, IVendorAdapter
 
         // TruckerCloud sometimes returns 200 with a timeout marker in the body.
         if (body.IndicatesVendorTimeout)
+        {
+            _logger.LogWarning("Vendor timeout detected in 200 response body for {Endpoint}", request.ResourceName);
             return FetchStatus.RetryTransient;
+        }
 
         // Success with an empty body is suspicious; treat it as transient.
         if (body.IsEmpty)
+        {
+            _logger.LogWarning("Empty response body on 200 for {Endpoint}, treating as transient", request.ResourceName);
             return FetchStatus.RetryTransient;
+        }
 
         // For TruckerCloud, "success" should still be parseable JSON.
         if (!body.IsValidJson)
+        {
+            _logger.LogWarning("Non-JSON response body on 200 for {Endpoint}, treating as permanent failure", request.ResourceName);
             return FetchStatus.FailPermanent;
+        }
 
         return FetchStatus.Success;
     }
@@ -321,51 +330,42 @@ internal sealed class TruckerCloudAdapter : VendorAdapterBase, IVendorAdapter
 
     #region Auth internals
 
-    private async Task<string> GetAuthorizationHeaderAsync(int apiVersion, CancellationToken cancellationToken)
+    private async Task<string> GetAuthorizationHeaderAsync(CancellationToken cancellationToken)
     {
-        var forceRefresh = _credentialInvalid.TryGetValue(apiVersion, out var invalid) && invalid;
+        var forceRefresh = _credentialInvalid;
 
-        if (!forceRefresh && _authTokens.TryGetValue(apiVersion, out var cached) && !string.IsNullOrWhiteSpace(cached))
-            return cached;
+        if (!forceRefresh && !string.IsNullOrWhiteSpace(_authToken))
+            return _authToken;
 
-        var gate = _authLocks.GetOrAdd(apiVersion, _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _authLock.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         try
         {
-            forceRefresh = _credentialInvalid.TryGetValue(apiVersion, out invalid) && invalid;
+            forceRefresh = _credentialInvalid;
 
-            if (!forceRefresh && _authTokens.TryGetValue(apiVersion, out cached) && !string.IsNullOrWhiteSpace(cached))
-                return cached;
+            if (!forceRefresh && !string.IsNullOrWhiteSpace(_authToken))
+                return _authToken;
 
-            // Small convenience: if we already fetched a token for another version and we're not forcing refresh,
-            // reuse it. If TruckerCloud ever makes tokens version-specific, delete this block.
-            if (!forceRefresh)
-            {
-                var tokenFromAnotherVersion = _authTokens.FirstOrDefault(kvp => !string.IsNullOrWhiteSpace(kvp.Value)).Value;
-                if (!string.IsNullOrWhiteSpace(tokenFromAnotherVersion))
-                {
-                    _authTokens[apiVersion] = tokenFromAnotherVersion;
-                    return tokenFromAnotherVersion;
-                }
-            }
+            _logger.LogInformation("Fetching auth token (forceRefresh={ForceRefresh})", forceRefresh);
 
-            var newToken = await FetchAuthTokenAsync(apiVersion, cancellationToken).ConfigureAwait(false);
+            var newToken = await FetchAuthTokenAsync(cancellationToken).ConfigureAwait(false);
 
-            _authTokens[apiVersion] = newToken ?? string.Empty;
-            _credentialInvalid[apiVersion] = false;
+            _authToken = newToken ?? string.Empty;
+            _credentialInvalid = false;
 
-            return newToken ?? string.Empty;
+            _logger.LogInformation("Auth token obtained successfully");
+
+            return _authToken;
         }
         finally
         {
-            gate.Release();
+            _authLock.Release();
         }
     }
 
-    private async Task<string> FetchAuthTokenAsync(int apiVersion, CancellationToken cancellationToken)
+    private async Task<string> FetchAuthTokenAsync(CancellationToken cancellationToken)
     {
-        var authUri = new Uri(HttpClient.BaseAddress!, $"v{apiVersion}/authenticate");
+        var authUri = new Uri(HttpClient.BaseAddress!, $"v{AuthApiVersion}/authenticate");
         var jsonToSend = $"{{ \"userName\":\"{_apiUserName}\", \"password\":\"{_apiPassword}\" }}";
 
         using var req = new HttpRequestMessage(HttpMethod.Post, authUri);

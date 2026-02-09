@@ -4,6 +4,7 @@ using System.Net;
 using Canal.Ingestion.ApiLoader.Model;
 using Canal.Ingestion.ApiLoader.Engine.Adapters;
 using System.Text;
+using Microsoft.Extensions.Logging;
 
 namespace Canal.Ingestion.ApiLoader.Engine;
 
@@ -20,8 +21,10 @@ namespace Canal.Ingestion.ApiLoader.Engine;
 /// </summary>
 public sealed class FetchEngine
 {
+    private readonly ILogger<FetchEngine> _logger;
+
     [SetsRequiredMembers]
-    public FetchEngine(IVendorAdapter vendorAdapter, int maxDegreeOfParallelism, int maxRetries, int minRetryDelayMs)
+    public FetchEngine(IVendorAdapter vendorAdapter, int maxDegreeOfParallelism, int maxRetries, int minRetryDelayMs, ILogger<FetchEngine> logger)
     {
         if (vendorAdapter is null) throw new ArgumentNullException(nameof(vendorAdapter));
         if (string.IsNullOrEmpty(vendorAdapter?.HttpClient?.BaseAddress?.ToString()))
@@ -32,6 +35,7 @@ public sealed class FetchEngine
         MinRetryDelayMs = minRetryDelayMs;
 
         _adapter = vendorAdapter;
+        _logger = logger;
     }
 
     public required int MaxDegreeOfParallelism { get; init; }
@@ -40,12 +44,15 @@ public sealed class FetchEngine
 
     private readonly IVendorAdapter _adapter;
 
-    
+
 
     public static string NewIdentifier => Guid.NewGuid().ToString("N");
 
     public async Task<List<FetchResult>> ProcessRequests(IngestionRun ingestionRun, List<Request> requests, Func<FetchResult, Task>? onPageFetched = null, CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("Processing {RequestCount} requests in parallel (maxDop={MaxDop}) for run {RunId}",
+            requests.Count, MaxDegreeOfParallelism, ingestionRun.IngestionRunId);
+
         var bag = new ConcurrentBag<FetchResult>();
         var options = new ParallelOptions { CancellationToken = cancellationToken, MaxDegreeOfParallelism = MaxDegreeOfParallelism };
 
@@ -69,7 +76,10 @@ public sealed class FetchEngine
 
             // MaxPages safety cap: enforced here so adapters don't have to.
             if (seedRequest.MaxPages.HasValue && stepNr > seedRequest.MaxPages.Value)
+            {
+                _logger.LogDebug("MaxPages cap ({MaxPages}) reached for {Endpoint}", seedRequest.MaxPages.Value, seedRequest.ResourceName);
                 break;
+            }
 
             var nextRequest = await _adapter.GetNextRequestAsync(seedRequest, previous, stepNr, cancellationToken).ConfigureAwait(false);
             if (nextRequest is null) break;
@@ -97,6 +107,8 @@ public sealed class FetchEngine
         };
 
         request.RequestId = _adapter.ComputeRequestId(request);
+
+        _logger.LogInformation("Fetch started: {Method} {Uri}", request.HttpMethod, result.RequestUri);
 
         var maxAttempts = Math.Max(1, MaxRetries + 1);
 
@@ -151,6 +163,8 @@ public sealed class FetchEngine
 
                 if (result.FetchOutcome == FetchStatus.Success)
                 {
+                    _logger.LogInformation("Fetch succeeded: {Method} {Uri} -> {StatusCode} in {DurationMs}ms ({PayloadBytes} bytes)",
+                        request.HttpMethod, result.RequestUri, (int)statusCode.Value, result.ResponseTimeMs, result.Content.Length);
                     _adapter.PostProcessSuccessfulResponse(result);
                     return result;
                 }
@@ -179,11 +193,28 @@ public sealed class FetchEngine
 
             var isLastAttempt = attemptNr >= maxAttempts;
 
-            if (result.FetchOutcome == FetchStatus.FailPermanent || isLastAttempt) break;
-            if (result.FetchOutcome == FetchStatus.RetryImmediately) continue;
+            if (result.FetchOutcome == FetchStatus.FailPermanent)
+            {
+                _logger.LogError("Permanent failure on attempt {AttemptNr}/{MaxAttempts} for {Uri}: {Message}", attemptNr, maxAttempts, result.RequestUri, msg);
+                break;
+            }
+
+            if (isLastAttempt)
+            {
+                _logger.LogError("All {MaxAttempts} attempts exhausted for {Uri}, last outcome: {Outcome}. {Message}", maxAttempts, result.RequestUri, result.FetchOutcome, msg);
+                break;
+            }
+
+            if (result.FetchOutcome == FetchStatus.RetryImmediately)
+            {
+                _logger.LogWarning("Retrying immediately (attempt {AttemptNr}/{MaxAttempts}) for {Uri}: {Message}", attemptNr, maxAttempts, result.RequestUri, msg);
+                continue;
+            }
 
             if (result.FetchOutcome == FetchStatus.RetryTransient)
             {
+                _logger.LogWarning("Transient failure on attempt {AttemptNr}/{MaxAttempts} for {Uri}, retrying in {DelayMs}ms: {Message}",
+                    attemptNr, maxAttempts, result.RequestUri, MinRetryDelayMs, msg);
                 await Task.Delay(MinRetryDelayMs, cancellationToken).ConfigureAwait(false);
                 continue;
             }

@@ -61,14 +61,26 @@ using Azure.Storage.Blobs;
 using Canal.Storage.Adls;
 
 using Canal.Ingestion.ApiLoader.Adapters.TruckerCloud;
+using Canal.Ingestion.ApiLoader.Adapters.Fmcsa;
 using Canal.Ingestion.ApiLoader.Engine.Adapters.TruckerCloud;
 using Canal.Ingestion.ApiLoader.Engine.Adapters.Fmcsa;
 using Canal.Ingestion.ApiLoader.Client;
 using Canal.Ingestion.ApiLoader.Model;
 
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 // TODO: Remove config files containing "secrets" - these should be managed with Azure Key Vault
     var config = new ConfigurationBuilder().AddJsonFile("appsettings.json", optional: false).Build();
+
+// LOGGING: Build a LoggerFactory from config. Console provider writes to stdout during dev.
+// To change log levels without recompiling, add a "Logging" section to appsettings.json.
+    using var loggerFactory = LoggerFactory.Create(builder =>
+    {
+        builder.AddConfiguration(config.GetSection("Logging"));
+        builder.AddConsole();
+    });
+    var hostLogger = loggerFactory.CreateLogger("Program");
+    hostLogger.LogInformation("Application starting");
     string truckerCloudApiUser     = config["AppSettings:API_USER"]                 ?? string.Empty;
     string truckerCloudApiPassword = config["AppSettings:API_PW"]                   ?? string.Empty;
     string adlsContainerName       = config["AppSettings:AZURE_CONTAINER_NAME"]     ?? string.Empty;
@@ -130,15 +142,15 @@ using Microsoft.Extensions.Configuration;
     /* DEPENDENCY 4) VendorAdapter
         adapter layer owns all the quirks for a given vendor. its feasible fpr one vendor to have multiple adapters if they have some endpoints with certain quirks and other endpoints with other quirks, but "vendor" felt like the right abstraction level during this POC/MVP
     */
-        var tcAdapter = new TruckerCloudAdapter(httpClient, truckerCloudApiUser, truckerCloudApiPassword);
-        // var fmcsaAdapter = new FmcsaAdapter(httpClient);
+        var tcAdapter = new TruckerCloudAdapter(httpClient, truckerCloudApiUser, truckerCloudApiPassword, loggerFactory.CreateLogger<TruckerCloudAdapter>());
+        // var fmcsaAdapter = new FmcsaAdapter(httpClient, loggerFactory.CreateLogger<FmcsaAdapter>());
 
     /*
         READY TO GO -- create a factory per vendor, then use factory.Create(definition).Load(...) for any endpoint.
     */
 
-    var tc = new EndpointLoaderFactory(tcAdapter, containerClient, environmentName, maxDop, defaultMaxRetries, minRetryDelayMs);
-    // var fmcsa = new EndpointLoaderFactory(fmcsaAdapter, containerClient, environmentName, maxDop, defaultMaxRetries, minRetryDelayMs);
+    var tc = new EndpointLoaderFactory(tcAdapter, containerClient, environmentName, maxDop, defaultMaxRetries, minRetryDelayMs, loggerFactory);
+    // var fmcsa = new EndpointLoaderFactory(fmcsaAdapter, containerClient, environmentName, maxDop, defaultMaxRetries, minRetryDelayMs, loggerFactory);
 
     // ── FMCSA examples (all simple paged endpoints) ──────────────────────
 

@@ -4,13 +4,14 @@ using System.Diagnostics.CodeAnalysis;
 using Canal.Ingestion.ApiLoader.Model;
 using Canal.Storage.Adls;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 
 namespace Canal.Ingestion.ApiLoader.Client;
 public abstract class EndpointLoaderBase
 {
 
     [SetsRequiredMembers]
-    public EndpointLoaderBase(IVendorAdapter vendorAdapter, BlobContainerClient containerClient, string environmentName, int maxDegreeOfParallelism, int maxRetries, int minRetryDelayMs)
+    public EndpointLoaderBase(IVendorAdapter vendorAdapter, BlobContainerClient containerClient, string environmentName, int maxDegreeOfParallelism, int maxRetries, int minRetryDelayMs, ILoggerFactory loggerFactory)
     {
         VendorAdapter = vendorAdapter;
         ContainerClient = containerClient;
@@ -18,6 +19,8 @@ public abstract class EndpointLoaderBase
         MaxDegreeOfParallelism = maxDegreeOfParallelism;
         MaxRetries = maxRetries;
         MinRetryDelayMs = minRetryDelayMs;
+        LoggerFactory = loggerFactory;
+        Logger = loggerFactory.CreateLogger<EndpointLoaderBase>();
     }
     protected IVendorAdapter VendorAdapter { get; }
     protected BlobContainerClient ContainerClient { get; init; }
@@ -25,6 +28,8 @@ public abstract class EndpointLoaderBase
     protected int MaxDegreeOfParallelism { get; init; }
     protected int MaxRetries { get; init; }
     protected int MinRetryDelayMs { get; init; }
+    protected ILoggerFactory LoggerFactory { get; init; }
+    protected ILogger Logger { get; init; }
 
     internal EndpointDefinition? Definition { get; private set; } = null;
     public string IngestionDomain => VendorAdapter?.IngestionDomain ?? string.Empty;
@@ -48,6 +53,9 @@ public abstract class EndpointLoaderBase
 
     public async Task SaveResultAsync(FetchResult r, CancellationToken cancellationToken)
     {
+        Logger.LogInformation("Saving result for {Endpoint} v{Version} page {PageNr} (run {RunId})",
+            r.Request.ResourceNameFriendly, r.Request.ResourceVersion, r.PageNr, r.IngestionRun.IngestionRunId);
+
         await ADLSWriter.SavePayloadAndMetadata(
             container: ContainerClient,
             environmentName: r.IngestionRun.EnvironmentName,
@@ -67,6 +75,8 @@ public abstract class EndpointLoaderBase
 
     public async Task SaveWatermarkAsync(string watermarkJson, CancellationToken cancellationToken)
     {
+        Logger.LogInformation("Saving watermark for {Vendor}/{Endpoint} v{Version}", VendorName, ResourceName, ResourceVersion);
+
         await ADLSWriter.SaveWatermark(ContainerClient, EnvironmentName, IsExternalSource, IngestionDomain, VendorName, ResourceName, ResourceVersion, watermarkJson, cancellationToken)
                         .ConfigureAwait(false);
     }
@@ -75,7 +85,12 @@ public abstract class EndpointLoaderBase
     {
         string watermarkPath = ADLSBlobNamer.GetBlobName(BlobCategory.Watermark, EnvironmentName, IsExternalSource, IngestionDomain, VendorName, ResourceName, ResourceVersion);
 
+        Logger.LogDebug("Loading watermark from {WatermarkPath}", watermarkPath);
+
         var watermarkJson = await ADLSReader.GetBlobAsJsonAsync(ContainerClient, watermarkPath, cancellationToken).ConfigureAwait(false);
+
+        if (watermarkJson is null)
+            Logger.LogDebug("No existing watermark found at {WatermarkPath}", watermarkPath);
 
         return watermarkJson;
     }

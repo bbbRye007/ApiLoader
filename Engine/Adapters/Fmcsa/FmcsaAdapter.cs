@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using Canal.Ingestion.ApiLoader.Engine.Adapters;
 using Canal.Ingestion.ApiLoader.Model;
+using Microsoft.Extensions.Logging;
 
 namespace Canal.Ingestion.ApiLoader.Adapters.Fmcsa;
 
@@ -34,17 +35,19 @@ internal sealed class FmcsaAdapter : VendorAdapterBase, IVendorAdapter
     #endregion
     #region Configuration
     private const int DefaultRequestSize = 500;
+    private readonly ILogger<FmcsaAdapter> _logger;
     #endregion
     #region Construction
     [SetsRequiredMembers]
-    public FmcsaAdapter(HttpClient httpClient)
+    public FmcsaAdapter(HttpClient httpClient, ILogger<FmcsaAdapter> logger)
       : base(httpClient)
     {
+        _logger = logger;
         // These should NOT affect the request identity (same "logical request" across pages).
         HttpClient.BaseAddress = new Uri(BaseUrlConst.TrimEnd('/'));
         QueryParamsToExcludeFromPayloadIdentifers.Add("$limit");
         QueryParamsToExcludeFromPayloadIdentifers.Add("$offset");
-        
+
     }
     #endregion
     #region IVendorAdapter: Request shaping
@@ -81,7 +84,10 @@ internal sealed class FmcsaAdapter : VendorAdapterBase, IVendorAdapter
     {
         // No auth token logic. If we see 401, treat it as permanent failure.
         if (statusCode == HttpStatusCode.Unauthorized)
+        {
+            _logger.LogWarning("Received 401 for FMCSA {Endpoint}, treating as permanent failure (no auth mechanism)", request.ResourceName);
             return FetchStatus.FailPermanent;
+        }
         if (currentOutcome != FetchStatus.Success)
             return currentOutcome;
         var body = InspectBody(content);
