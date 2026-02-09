@@ -154,7 +154,7 @@ public static class TruckerCloudEndpoints
         RequiresIterationList = true,
         MinTimeSpan = TimeSpan.FromHours(8),
         MaxTimeSpan = TimeSpan.FromDays(1) - TimeSpan.FromSeconds(1),
-        BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld_ShortNames, startParamName: "startDateTime", endParamName: "endDateTime")
+        BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld_StandardNames, startParamName: "startDateTime", endParamName: "endDateTime")
     };
 
     // ── Extractor helpers ───────────────────────────────────────────────
