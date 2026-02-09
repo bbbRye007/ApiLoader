@@ -228,7 +228,9 @@ internal sealed class FmcsaAdapter : VendorAdapterBase, IVendorAdapter
           route: seedRequest.Route,
           queryParameters: qp,
           requestHeaders: seedRequest.RequestHeaders,
-          pageSize: seedRequest.PageSize);
+          pageSize: seedRequest.PageSize,
+          httpMethod: seedRequest.HttpMethod,
+          bodyParamsJson: seedRequest.BodyParamsJson);
 
         // Stable blob naming / ordering:
         // turn offset+limit into a human 1-based page sequence.

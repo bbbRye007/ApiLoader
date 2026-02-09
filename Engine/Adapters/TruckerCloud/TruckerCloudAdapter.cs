@@ -322,7 +322,9 @@ internal sealed class TruckerCloudAdapter : VendorAdapterBase, IVendorAdapter
             route: seedRequest.Route,
             queryParameters: qp,
             requestHeaders: seedRequest.RequestHeaders,
-            pageSize: seedRequest.PageSize);
+            pageSize: seedRequest.PageSize,
+            httpMethod: seedRequest.HttpMethod,
+            bodyParamsJson: seedRequest.BodyParamsJson);
 
         // SequenceNr is used for stable blob naming / metadata ordering.
         result.SequenceNr = pageNr;
