@@ -90,10 +90,10 @@ public static class TruckerCloudEndpoints
     {
         ResourceName = "safety-events", FriendlyName = "SafetyEvents", ResourceVersion = 5,
         HttpMethod = HttpMethod.Post, SupportsWatermark = true,
-        DefaultPageSize = 1000,
+        DefaultPageSize = 100,
         RequiresIterationList = true,
         MinTimeSpan = TimeSpan.FromHours(12),
-        BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld, startParamName: "startTime", endParamName: "endTime", timeFormat: "yyyy-MM-dd'T'HH:mm:ss.fff'Z'")
+        BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld_ShortNames, startParamName: "startTime", endParamName: "endTime", timeFormat: "yyyy-MM-dd'T'HH:mm:ss.fff'Z'")
     };
 
     /// <summary>
@@ -108,7 +108,7 @@ public static class TruckerCloudEndpoints
         DefaultPageSize = 1000,
         RequiresIterationList = true,
         MinTimeSpan = TimeSpan.FromHours(12),
-        BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld, startParamName: "startTime", endParamName: "endTime")
+        BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld_ShortNames, startParamName: "startTime", endParamName: "endTime")
     };
 
     /// <summary>
@@ -123,7 +123,7 @@ public static class TruckerCloudEndpoints
         DefaultPageSize = 1000,
         RequiresIterationList = true,
         MinTimeSpan = TimeSpan.FromHours(12),
-        BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEldGpsMilesKeys, startParamName: "startDateTime", endParamName: "endDateTime")
+        BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld_StandardNames, startParamName: "startDateTime", endParamName: "endDateTime")
     };
 
     /// <summary>
@@ -138,7 +138,7 @@ public static class TruckerCloudEndpoints
         DefaultPageSize = 1000,
         RequiresIterationList = true,
         MinTimeSpan = TimeSpan.FromHours(12),
-        BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEldGpsMilesKeys, startParamName: "startDateTime", endParamName: "endDateTime")
+        BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld_StandardNames, startParamName: "startDateTime", endParamName: "endDateTime")
     };
 
     /// <summary>
@@ -154,7 +154,7 @@ public static class TruckerCloudEndpoints
         RequiresIterationList = true,
         MinTimeSpan = TimeSpan.FromHours(8),
         MaxTimeSpan = TimeSpan.FromDays(1) - TimeSpan.FromSeconds(1),
-        BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld, startParamName: "startDateTime", endParamName: "endDateTime")
+        BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld_ShortNames, startParamName: "startDateTime", endParamName: "endDateTime")
     };
 
     // ── Extractor helpers ───────────────────────────────────────────────
@@ -162,11 +162,11 @@ public static class TruckerCloudEndpoints
     private static List<Dictionary<string, string>> ExtractCarrierCodes(List<FetchResult> carriers)
         => List_CarrierCodes.FromList(carriers).Select(c => new Dictionary<string, string> { ["carrierCode"] = c.CarrierCode, ["codeType"] = c.CarrierCodeType }).ToList();
 
-    private static List<Dictionary<string, string>> ExtractCarrierCodesAndEld(List<FetchResult> carriers)
+    private static List<Dictionary<string, string>> ExtractCarrierCodesAndEld_ShortNames(List<FetchResult> carriers)
         => List_CarrierCodesAndEldVendors.FromList(carriers).Select(c => new Dictionary<string, string> { ["carrierCode"] = c.CarrierCode, ["codeType"] = c.CarrierCodeType, ["eldVendor"] = c.EldVendor }).ToList();
 
     /// <summary>GpsMiles and ZipCodeMiles use different query parameter key names than other carrier+eld endpoints.</summary>
-    private static List<Dictionary<string, string>> ExtractCarrierCodesAndEldGpsMilesKeys(List<FetchResult> carriers)
+    private static List<Dictionary<string, string>> ExtractCarrierCodesAndEld_StandardNames(List<FetchResult> carriers)
         => List_CarrierCodesAndEldVendors.FromList(carriers).Select(c => new Dictionary<string, string> { ["carrierCodeValue"] = c.CarrierCode, ["carrierCodeType"] = c.CarrierCodeType, ["eldVendor"] = c.EldVendor }).ToList();
 
     private static List<Dictionary<string, string>> ExtractVehicleData(List<FetchResult> vehicles)
