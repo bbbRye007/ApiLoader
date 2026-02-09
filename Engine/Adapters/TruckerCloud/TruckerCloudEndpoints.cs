@@ -6,8 +6,12 @@ namespace Canal.Ingestion.ApiLoader.Engine.Adapters.TruckerCloud;
 
 public static class TruckerCloudEndpoints
 {
-    // ── Simple paged endpoints ──────────────────────────────────────────
+    // ── Simple paged endpoints (no iteration list required) ─────────────
 
+    /// <summary>
+    /// Fetches all carriers. No inputs required.
+    /// Returns carrier data used as iterationList for most dependent endpoints.
+    /// </summary>
     public static readonly EndpointDefinition CarriersV4 = new()
     {
         ResourceName = "carriers", FriendlyName = "Carriers", ResourceVersion = 4,
@@ -15,6 +19,10 @@ public static class TruckerCloudEndpoints
         BuildRequests = RequestBuilders.Simple
     };
 
+    /// <summary>
+    /// Fetches all vehicles. No inputs required.
+    /// Returns vehicle data used as iterationList for VehicleIgnitionV4.
+    /// </summary>
     public static readonly EndpointDefinition VehiclesV4 = new()
     {
         ResourceName = "vehicles", FriendlyName = "Vehicles", ResourceVersion = 4,
@@ -22,6 +30,9 @@ public static class TruckerCloudEndpoints
         BuildRequests = RequestBuilders.Simple
     };
 
+    /// <summary>
+    /// Fetches all subscriptions. No inputs required.
+    /// </summary>
     public static readonly EndpointDefinition SubscriptionsV4 = new()
     {
         ResourceName = "subscriptions", FriendlyName = "Subscriptions", ResourceVersion = 4,
@@ -29,74 +40,118 @@ public static class TruckerCloudEndpoints
         BuildRequests = RequestBuilders.Simple
     };
 
-    // ── Carrier-dependent endpoints ─────────────────────────────────────
+    // ── Carrier-dependent endpoints (require iterationList from CarriersV4) ──
 
+    /// <summary>
+    /// Fetches drivers per carrier.
+    /// Requires iterationList from CarriersV4.
+    /// </summary>
     public static readonly EndpointDefinition DriversV4 = new()
     {
         ResourceName = "drivers", FriendlyName = "Drivers", ResourceVersion = 4,
         DefaultPageSize = 1000,
+        RequiresIterationList = true,
         BuildRequests = RequestBuilders.CarrierDependent(ExtractCarrierCodes)
     };
 
+    /// <summary>
+    /// Fetches risk scores per carrier.
+    /// Requires iterationList from CarriersV4.
+    /// </summary>
     public static readonly EndpointDefinition RiskScoresV4 = new()
     {
         ResourceName = "risk-scores", FriendlyName = "RiskScores", ResourceVersion = 4,
         DefaultPageSize = 1000,
+        RequiresIterationList = true,
         BuildRequests = RequestBuilders.CarrierDependent(ExtractCarrierCodes)
     };
 
-    // VehicleIgnition is intentionally excluded from normal use.
-    // When querying just 1 vehicle, the response was over a million lines long with no date filtering.
+    /// <summary>
+    /// Fetches vehicle ignition data per vehicle.
+    /// Requires iterationList from VehiclesV4.
+    /// WARNING: Returns extremely large payloads (900K+ lines per vehicle) with no date filtering.
+    /// </summary>
     public static readonly EndpointDefinition VehicleIgnitionV4 = new()
     {
         ResourceName = "vehicles/ignition", FriendlyName = "VehicleIgnition", ResourceVersion = 4,
         DefaultPageSize = 1000,
+        RequiresIterationList = true,
         BuildRequests = RequestBuilders.CarrierDependent(ExtractVehicleData)
     };
 
-    // ── Carrier + time-window endpoints ─────────────────────────────────
+    // ── Carrier + time-window endpoints (require iterationList from CarriersV4, support watermark) ──
 
+    /// <summary>
+    /// Fetches safety events per carrier+ELD within a time window.
+    /// Requires iterationList from CarriersV4. Supports watermark for incremental loads.
+    /// Uses POST method. Min time span: 12 hours.
+    /// </summary>
     public static readonly EndpointDefinition SafetyEventsV5 = new()
     {
         ResourceName = "safety-events", FriendlyName = "SafetyEvents", ResourceVersion = 5,
         HttpMethod = HttpMethod.Post, SupportsWatermark = true,
         DefaultPageSize = 1000,
+        RequiresIterationList = true,
         MinTimeSpan = TimeSpan.FromHours(12),
         BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld, startParamName: "startTime", endParamName: "endTime", timeFormat: "yyyy-MM-dd'T'HH:mm:ss.fff'Z'")
     };
 
+    /// <summary>
+    /// Fetches radius of operation per carrier+ELD within a time window.
+    /// Requires iterationList from CarriersV4. Supports watermark for incremental loads.
+    /// Min time span: 12 hours.
+    /// </summary>
     public static readonly EndpointDefinition RadiusOfOperationV4 = new()
     {
         ResourceName = "radius-of-operation", FriendlyName = "RadiusOfOperation", ResourceVersion = 4,
         SupportsWatermark = true,
         DefaultPageSize = 1000,
+        RequiresIterationList = true,
         MinTimeSpan = TimeSpan.FromHours(12),
         BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld, startParamName: "startTime", endParamName: "endTime")
     };
 
+    /// <summary>
+    /// Fetches GPS miles per carrier+ELD within a time window.
+    /// Requires iterationList from CarriersV4. Supports watermark for incremental loads.
+    /// Min time span: 12 hours.
+    /// </summary>
     public static readonly EndpointDefinition GpsMilesV4 = new()
     {
         ResourceName = "enriched-data/gps-miles", FriendlyName = "GpsMiles", ResourceVersion = 4,
         SupportsWatermark = true,
         DefaultPageSize = 1000,
+        RequiresIterationList = true,
         MinTimeSpan = TimeSpan.FromHours(12),
         BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEldGpsMilesKeys, startParamName: "startDateTime", endParamName: "endDateTime")
     };
 
+    /// <summary>
+    /// Fetches zip code miles per carrier+ELD within a time window.
+    /// Requires iterationList from CarriersV4. Supports watermark for incremental loads.
+    /// Min time span: 12 hours.
+    /// </summary>
     public static readonly EndpointDefinition ZipCodeMilesV4 = new()
     {
         ResourceName = "enriched-data/zip-code-miles", FriendlyName = "ZipCodeMiles", ResourceVersion = 4,
         SupportsWatermark = true,
         DefaultPageSize = 1000,
+        RequiresIterationList = true,
         MinTimeSpan = TimeSpan.FromHours(12),
         BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEldGpsMilesKeys, startParamName: "startDateTime", endParamName: "endDateTime")
     };
 
+    /// <summary>
+    /// Fetches trip data per carrier+ELD within a time window.
+    /// Requires iterationList from CarriersV4. Supports watermark for incremental loads.
+    /// Min time span: 8 hours. Max time span: 23 hours, 59 minutes, 59 seconds.
+    /// </summary>
     public static readonly EndpointDefinition TripsV5 = new()
     {
         ResourceName = "trips", FriendlyName = "Trips", ResourceVersion = 5,
         SupportsWatermark = true,
         DefaultPageSize = 1000,
+        RequiresIterationList = true,
         MinTimeSpan = TimeSpan.FromHours(8),
         MaxTimeSpan = TimeSpan.FromDays(1) - TimeSpan.FromSeconds(1),
         BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld, startParamName: "startDateTime", endParamName: "endDateTime")

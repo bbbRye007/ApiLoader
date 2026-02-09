@@ -21,11 +21,17 @@ public class EndpointLoader : EndpointLoaderBase
     }
 
     public async Task<List<FetchResult>> Load(
-        List<FetchResult>? priorResults = null, DateTimeOffset? overrideStartUtc = null, DateTimeOffset? overrideEndUtc = null,
+        List<FetchResult>? iterationList = null, DateTimeOffset? overrideStartUtc = null, DateTimeOffset? overrideEndUtc = null,
         int? pageSize = null, int? maxPages = null, SaveBehavior saveBehavior = SaveBehavior.AfterAll, bool saveWatermark = true,
         string bodyParamsJson = "{}", CancellationToken cancellationToken = default)
     {
         InitRun(_definition);
+
+        if (_definition.RequiresIterationList && (iterationList is null || iterationList.Count == 0))
+            throw new ArgumentException(
+                $"Endpoint '{_definition.FriendlyName}' requires an iteration list (e.g., carrier results from a prior Load() call). " +
+                "Pass the output as the iterationList parameter.",
+                nameof(iterationList));
 
         var effectivePageSize = pageSize ?? _definition.DefaultPageSize;
 
@@ -44,7 +50,7 @@ public class EndpointLoader : EndpointLoaderBase
                 endUtc = startUtc.Value + _definition.MaxTimeSpan.Value;
         }
 
-        var parameters = new LoadParameters { PriorResults = priorResults, StartUtc = startUtc, EndUtc = endUtc, BodyParamsJson = bodyParamsJson };
+        var parameters = new LoadParameters { IterationList = iterationList, StartUtc = startUtc, EndUtc = endUtc, BodyParamsJson = bodyParamsJson };
 
         // The endpoint definition knows how to build its own requests
         var requests = _definition.BuildRequests(VendorAdapter, _definition, effectivePageSize, parameters);

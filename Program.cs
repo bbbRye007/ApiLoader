@@ -166,32 +166,20 @@ using Microsoft.Extensions.Configuration;
 
     // ── TruckerCloud examples ────────────────────────────────────────────
 
-    // DO NOT USE VehicleIgnition (see TruckerCloudEndpoints.VehicleIgnitionV4 comment)
-    // For ONE Vehicle the result was a json document 900K lines long! No date parameters to filter by!
+    var now = DateTimeOffset.UtcNow;
+    var overMin = now.AddDays(-14);
+    var overMax = now.AddDays(-7);
 
-    // carriers is a required input for dependent endpoints. fetch it first, then pass results as priorResults.
-    var carriers = await tc.Create(TruckerCloudEndpoints.CarriersV4).Load(cancellationToken: cts.Token, saveBehavior: SaveBehavior.None, saveWatermark: false);
-    Console.WriteLine(carriers[0].Content);
-    // await tc.Create(TruckerCloudEndpoints.SafetyEventsV5).Load(priorResults: carriers, overrideStartUtc: DateTimeOffset.Now.AddDays(-30), overrideEndUtc: DateTimeOffset.Now.AddDays(-5), saveWatermark: true, cancellationToken: cts.Token);
-    // await tc.Create(TruckerCloudEndpoints.SafetyEventsV5).Load(priorResults: carriers, cancellationToken: cts.Token);
+    var overMin1D = DateTimeOffset.Parse("2026-02-04");
+    var overMax1D = overMin1D.AddHours(23).AddMinutes(59).AddSeconds(59);
 
-    // var vehicles = await tc.Create(TruckerCloudEndpoints.VehiclesV4).Load(cancellationToken: cts.Token, saveBehavior: SaveBehavior.None);
-
-    // THIS ENDPOINT IS A SLOOOOW!!! FOR ONE out of almost 1000 vehicles...
-
-    // await tc.Create(TruckerCloudEndpoints.GpsMilesV4).Load(priorResults: carriers, cancellationToken: cts.Token);  // <<-- NOT FOR GENERAL POLLING!!
-
-    // await tc.Create(TruckerCloudEndpoints.ZipCodeMilesV4).Load(priorResults: carriers, overrideStartUtc: DateTimeOffset.Now.AddDays(-150), overrideEndUtc: DateTimeOffset.Now.AddDays(-90), saveWatermark: true, cancellationToken: cts.Token);
-    // await tc.Create(TruckerCloudEndpoints.RadiusOfOperationV4).Load(priorResults: carriers, overrideStartUtc: DateTimeOffset.Now.AddDays(-150), overrideEndUtc: DateTimeOffset.Now.AddDays(-90), saveWatermark: true, cancellationToken: cts.Token);
-    // await tc.Create(TruckerCloudEndpoints.GpsMilesV4).Load(priorResults: carriers, overrideStartUtc: DateTimeOffset.Now.AddDays(-150), overrideEndUtc: DateTimeOffset.Now.AddDays(-90), saveWatermark: true, cancellationToken: cts.Token);
-    // await tc.Create(TruckerCloudEndpoints.DriversV4).Load(priorResults: carriers, cancellationToken: cts.Token);
-    // await tc.Create(TruckerCloudEndpoints.RiskScoresV4).Load(priorResults: carriers, cancellationToken: cts.Token);
-
-    // careful with watermarked (incremental) endpoints:
-    // overriding the enddate to 90 days ago while also saving the watermark file will cause the next incremental load to pick up from 90 days ago.
-    // for one off backfills, pass param saveWatermark: false
-    // await tc.Create(TruckerCloudEndpoints.ZipCodeMilesV4).Load(priorResults: carriers, overrideStartUtc: DateTimeOffset.Now.AddDays(-150), overrideEndUtc: DateTimeOffset.Now.AddDays(-90), saveWatermark: true, cancellationToken: cts.Token);
-    // await tc.Create(TruckerCloudEndpoints.ZipCodeMilesV4).Load(priorResults: carriers, cancellationToken: cts.Token); // normal incremental mode should pick up from 90 days ago through today.
-
-    // await tc.Create(TruckerCloudEndpoints.RadiusOfOperationV4).Load(priorResults: carriers, overrideStartUtc: DateTimeOffset.Now.AddDays(-150), overrideEndUtc: DateTimeOffset.Now.AddDays(-90), saveWatermark: true, cancellationToken: cts.Token);
-    // await tc.Create(TruckerCloudEndpoints.RadiusOfOperationV4).Load(priorResults: carriers, cancellationToken: cts.Token); // normal incremental mode should pick up from 90 days ago through today.
+    var carriers =
+    await tc.Create(TruckerCloudEndpoints.CarriersV4).Load(cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
+    await tc.Create(TruckerCloudEndpoints.VehiclesV4).Load(cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
+    await tc.Create(TruckerCloudEndpoints.DriversV4).Load(cancellationToken: cts.Token, iterationList: carriers, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
+    await tc.Create(TruckerCloudEndpoints.RiskScoresV4).Load(cancellationToken: cts.Token, iterationList: carriers, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
+    await tc.Create(TruckerCloudEndpoints.SafetyEventsV5).Load(cancellationToken: cts.Token, iterationList: carriers, overrideStartUtc: overMin, overrideEndUtc: overMax, saveWatermark: true, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
+    await tc.Create(TruckerCloudEndpoints.RadiusOfOperationV4).Load(cancellationToken: cts.Token, iterationList: carriers, overrideStartUtc: overMin, overrideEndUtc: overMax, saveWatermark: true, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
+    await tc.Create(TruckerCloudEndpoints.GpsMilesV4).Load(cancellationToken: cts.Token, iterationList: carriers, overrideStartUtc: overMin, overrideEndUtc: overMax, saveWatermark: true, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
+    await tc.Create(TruckerCloudEndpoints.ZipCodeMilesV4).Load(cancellationToken: cts.Token, iterationList: carriers, overrideStartUtc: overMin, overrideEndUtc: overMax, saveWatermark: true, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
+    await tc.Create(TruckerCloudEndpoints.TripsV5).Load(cancellationToken: cts.Token, iterationList: carriers, overrideStartUtc: overMin1D, overrideEndUtc: overMax1D, saveWatermark: true, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);

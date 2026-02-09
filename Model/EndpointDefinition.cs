@@ -17,4 +17,5 @@ public sealed record EndpointDefinition
     public TimeSpan? MinTimeSpan { get; init; }
     public TimeSpan? MaxTimeSpan { get; init; }
     public bool SupportsWatermark { get; init; } = false;
+    public bool RequiresIterationList { get; init; } = false;
 }

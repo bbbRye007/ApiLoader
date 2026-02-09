@@ -21,8 +21,8 @@ public static class RequestBuilders
     {
         return (adapter, def, pageSize, parameters) =>
         {
-            ArgumentNullException.ThrowIfNull(parameters.PriorResults, nameof(parameters.PriorResults));
-            var rows = extractRows(parameters.PriorResults);
+            ArgumentNullException.ThrowIfNull(parameters.IterationList, nameof(parameters.IterationList));
+            var rows = extractRows(parameters.IterationList);
             return rows.Select(qp => new Request(adapter, def.ResourceName, def.ResourceVersion, pageSize: pageSize, httpMethod: def.HttpMethod, queryParameters: qp)).ToList();
         };
     }
@@ -35,8 +35,8 @@ public static class RequestBuilders
     {
         return (adapter, def, pageSize, parameters) =>
         {
-            ArgumentNullException.ThrowIfNull(parameters.PriorResults, nameof(parameters.PriorResults));
-            var rows = extractRows(parameters.PriorResults);
+            ArgumentNullException.ThrowIfNull(parameters.IterationList, nameof(parameters.IterationList));
+            var rows = extractRows(parameters.IterationList);
             return rows.Select(qp =>
             {
                 qp[startParamName] = parameters.StartUtc!.Value.ToString(timeFormat);
