@@ -125,7 +125,11 @@ internal sealed class TruckerCloudAdapter : VendorAdapterBase, IVendorAdapter
         }
 
         if (currentOutcome != FetchStatus.Success)
+        {
+            _logger.LogDebug("RefineFetchOutcome for {Endpoint} v{Version}: passing through {Outcome} (HTTP {StatusCode})",
+                request.ResourceName, request.ResourceVersion, currentOutcome, statusCode.HasValue ? (int)statusCode.Value : (int?)null);
             return currentOutcome;
+        }
 
         var body = InspectBody(content);
 

@@ -23,7 +23,7 @@ public static class RequestBuilders
         {
             ArgumentNullException.ThrowIfNull(parameters.IterationList, nameof(parameters.IterationList));
             var rows = extractRows(parameters.IterationList);
-            return rows.Select(qp => new Request(adapter, def.ResourceName, def.ResourceVersion, pageSize: pageSize, httpMethod: def.HttpMethod, queryParameters: qp)).ToList();
+            return rows.Select(qp => new Request(adapter, def.ResourceName, def.ResourceVersion, pageSize: pageSize, httpMethod: def.HttpMethod, queryParameters: qp, bodyParamsJson: parameters.BodyParamsJson)).ToList();
         };
     }
 
@@ -41,7 +41,7 @@ public static class RequestBuilders
             {
                 qp[startParamName] = parameters.StartUtc!.Value.ToString(timeFormat);
                 qp[endParamName] = parameters.EndUtc!.Value.ToString(timeFormat);
-                return new Request(adapter, def.ResourceName, def.ResourceVersion, pageSize: pageSize, httpMethod: def.HttpMethod, queryParameters: qp);
+                return new Request(adapter, def.ResourceName, def.ResourceVersion, pageSize: pageSize, httpMethod: def.HttpMethod, queryParameters: qp, bodyParamsJson: parameters.BodyParamsJson);
             }).ToList();
         };
     }

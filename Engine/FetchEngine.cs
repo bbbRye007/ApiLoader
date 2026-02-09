@@ -108,7 +108,10 @@ public sealed class FetchEngine
 
         request.RequestId = _adapter.ComputeRequestId(request);
 
-        _logger.LogInformation("Fetch started: {Method} {Uri}", request.HttpMethod, result.RequestUri);
+        if (request.HttpMethod == HttpMethod.Post)
+            _logger.LogInformation("Fetch started: {Method} {Uri} (body: {RequestBody})", request.HttpMethod, result.RequestUri, request.BodyParamsJson);
+        else
+            _logger.LogInformation("Fetch started: {Method} {Uri}", request.HttpMethod, result.RequestUri);
 
         var maxAttempts = Math.Max(1, MaxRetries + 1);
 
@@ -195,26 +198,36 @@ public sealed class FetchEngine
 
             if (result.FetchOutcome == FetchStatus.FailPermanent)
             {
-                _logger.LogError("Permanent failure on attempt {AttemptNr}/{MaxAttempts} for {Uri}: {Message}", attemptNr, maxAttempts, result.RequestUri, msg);
+                _logger.LogError("Permanent failure on attempt {AttemptNr}/{MaxAttempts} for {Method} {Uri}: {Message}\n  StatusCode={StatusCode} ContentType={ContentType}\n  ResponseBody={ResponseBody}",
+                    attemptNr, maxAttempts, request.HttpMethod, result.RequestUri, msg,
+                    result.HttpStatusCode.HasValue ? (int)result.HttpStatusCode.Value : (int?)null,
+                    result.ContentType, Truncate(result.Content ?? string.Empty, maxChars: 1024));
                 break;
             }
 
             if (isLastAttempt)
             {
-                _logger.LogError("All {MaxAttempts} attempts exhausted for {Uri}, last outcome: {Outcome}. {Message}", maxAttempts, result.RequestUri, result.FetchOutcome, msg);
+                _logger.LogError("All {MaxAttempts} attempts exhausted for {Method} {Uri}, last outcome: {Outcome}. {Message}\n  StatusCode={StatusCode} ContentType={ContentType}\n  ResponseBody={ResponseBody}",
+                    maxAttempts, request.HttpMethod, result.RequestUri, result.FetchOutcome, msg,
+                    result.HttpStatusCode.HasValue ? (int)result.HttpStatusCode.Value : (int?)null,
+                    result.ContentType, Truncate(result.Content ?? string.Empty, maxChars: 1024));
                 break;
             }
 
             if (result.FetchOutcome == FetchStatus.RetryImmediately)
             {
-                _logger.LogWarning("Retrying immediately (attempt {AttemptNr}/{MaxAttempts}) for {Uri}: {Message}", attemptNr, maxAttempts, result.RequestUri, msg);
+                _logger.LogWarning("Retrying immediately (attempt {AttemptNr}/{MaxAttempts}) for {Method} {Uri}: {Message} (StatusCode={StatusCode})",
+                    attemptNr, maxAttempts, request.HttpMethod, result.RequestUri, msg,
+                    result.HttpStatusCode.HasValue ? (int)result.HttpStatusCode.Value : (int?)null);
                 continue;
             }
 
             if (result.FetchOutcome == FetchStatus.RetryTransient)
             {
-                _logger.LogWarning("Transient failure on attempt {AttemptNr}/{MaxAttempts} for {Uri}, retrying in {DelayMs}ms: {Message}",
-                    attemptNr, maxAttempts, result.RequestUri, MinRetryDelayMs, msg);
+                _logger.LogWarning("Transient failure on attempt {AttemptNr}/{MaxAttempts} for {Method} {Uri}, retrying in {DelayMs}ms: {Message} (StatusCode={StatusCode})\n  ResponseBody={ResponseBody}",
+                    attemptNr, maxAttempts, request.HttpMethod, result.RequestUri, MinRetryDelayMs, msg,
+                    result.HttpStatusCode.HasValue ? (int)result.HttpStatusCode.Value : (int?)null,
+                    Truncate(result.Content ?? string.Empty, maxChars: 512));
                 await Task.Delay(MinRetryDelayMs, cancellationToken).ConfigureAwait(false);
                 continue;
             }
