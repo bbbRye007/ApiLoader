@@ -1,9 +1,9 @@
 using System.Text.Json;
 
 namespace Canal.Ingestion.ApiLoader.Adapters.Utilities;
-internal static class JsonQueryHelper
+public static class JsonQueryHelper
 {
-    internal static List<Dictionary<string, string>> QuickQuery(IEnumerable<string> pagesJson, IReadOnlyDictionary<string, string> columnMap, bool distinct, string contentPropertyName = "content")
+    public static List<Dictionary<string, string>> QuickQuery(IEnumerable<string> pagesJson, IReadOnlyDictionary<string, string> columnMap, bool distinct, string contentPropertyName = "content")
     {
         if (pagesJson is null) throw new ArgumentNullException(nameof(pagesJson));
         if (columnMap is null) throw new ArgumentNullException(nameof(columnMap));

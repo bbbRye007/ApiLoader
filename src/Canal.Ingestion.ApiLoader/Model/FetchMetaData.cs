@@ -5,7 +5,7 @@ using System.Text.Json;
 
 namespace Canal.Ingestion.ApiLoader.Model;
 
-internal sealed class FetchMetaData
+public sealed class FetchMetaData
 {
     public FetchMetaData(FetchResult fetchResult, List<string> redactKeys)
     {
