@@ -158,10 +158,9 @@ internal sealed class FmcsaAdapter : VendorAdapterBase, IVendorAdapter
             return new BodyInspection(IsEmpty: true, IsValidJson: false);
         if (TryParseJson(content, out var json) && json is not null)
         {
-            if (json.RootElement.ValueKind == JsonValueKind.Array && json.RootElement.GetArrayLength() == 0)
-                return new BodyInspection(IsEmpty: true, IsValidJson: true);
+            var isEmpty = json.RootElement.ValueKind == JsonValueKind.Array && json.RootElement.GetArrayLength() == 0;
             json.Dispose();
-            return new BodyInspection(IsEmpty: false, IsValidJson: true);
+            return new BodyInspection(IsEmpty: isEmpty, IsValidJson: true);
         }
         return new BodyInspection(IsEmpty: false, IsValidJson: false);
     }

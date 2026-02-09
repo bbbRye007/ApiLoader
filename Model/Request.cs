@@ -8,8 +8,8 @@ public sealed class Request
                    IReadOnlyDictionary<string, string>? queryParameters = null, IReadOnlyDictionary<string, string>? requestHeaders = null,
                    int? pageSize = null, HttpMethod? httpMethod = null, string bodyParamsJson = "{}")
     {
-        string vendorAdapter_baseUrl = vendorAdapter.BaseUrl;
         ArgumentNullException.ThrowIfNull(vendorAdapter, nameof(vendorAdapter));
+        string vendorAdapter_baseUrl = vendorAdapter.BaseUrl;
         ArgumentException.ThrowIfNullOrEmpty(vendorAdapter_baseUrl, nameof(vendorAdapter_baseUrl));
         ArgumentException.ThrowIfNullOrEmpty(resourceName, nameof(resourceName));
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(resourceVersion, nameof(resourceVersion));

@@ -254,11 +254,9 @@ internal sealed class TruckerCloudAdapter : VendorAdapterBase, IVendorAdapter
         // "Valid JSON" check; do not keep the parsed doc.
         if (TryParseJson(content, out var json) && json is not null)
         {
-            if(json.RootElement.ValueKind == JsonValueKind.Array && json.RootElement.GetArrayLength() == 0)
-                return new BodyInspection(IsEmpty: true, IndicatesVendorTimeout: false, IsValidJson: true);
-
+            var isEmpty = json.RootElement.ValueKind == JsonValueKind.Array && json.RootElement.GetArrayLength() == 0;
             json.Dispose();
-            return new BodyInspection(IsEmpty: false, IndicatesVendorTimeout: false, IsValidJson: true);
+            return new BodyInspection(IsEmpty: isEmpty, IndicatesVendorTimeout: false, IsValidJson: true);
         }
 
         return new BodyInspection(IsEmpty: false, IndicatesVendorTimeout: false, IsValidJson: false);
@@ -372,14 +370,13 @@ internal sealed class TruckerCloudAdapter : VendorAdapterBase, IVendorAdapter
     private async Task<string> FetchAuthTokenAsync(CancellationToken cancellationToken)
     {
         var authUri = new Uri(HttpClient.BaseAddress!, $"v{AuthApiVersion}/authenticate");
-        var jsonToSend = $"{{ \"userName\":\"{_apiUserName}\", \"password\":\"{_apiPassword}\" }}";
+        var jsonToSend = JsonSerializer.Serialize(new { userName = _apiUserName, password = _apiPassword });
 
         using var req = new HttpRequestMessage(HttpMethod.Post, authUri);
         req.Headers.Accept.Clear();
         req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*"));
 
-        req.Content = new ByteArrayContent(Encoding.UTF8.GetBytes(jsonToSend));
-        req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+        req.Content = new StringContent(jsonToSend, Encoding.UTF8, "application/json");
 
         using var resp = await HttpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
         var body = await resp.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);

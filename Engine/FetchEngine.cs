@@ -88,7 +88,7 @@ public sealed class FetchEngine
             results.Add(result);
             previous = result;
 
-            if (result.FetchSucceeded && onPageFetched is not null)
+            if (onPageFetched is not null)
                 await onPageFetched(result).ConfigureAwait(false);
 
             if (!result.FetchSucceeded) break;

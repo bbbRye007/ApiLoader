@@ -43,7 +43,7 @@ public static class ADLSReader
             var download = await blob.DownloadStreamingAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
             await using var content = download.Value.Content;
 
-            using var reader = new StreamReader(content, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 1024 * 8, leaveOpen: false);
+            using var reader = new StreamReader(content, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 1024 * 8, leaveOpen: true);
             return await reader.ReadToEndAsync().ConfigureAwait(false);
         }
         catch (RequestFailedException ex) when (ex.Status == 404)

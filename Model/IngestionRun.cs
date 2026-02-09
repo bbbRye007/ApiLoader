@@ -7,7 +7,7 @@ public sealed class IngestionRun
     {
 
         IngestionRunStartUtc = DateTimeOffset.UtcNow;
-        _epochsuffix = RandomNumberGenerator.GetInt32(0,10000).ToString("D3");
+        _epochsuffix = RandomNumberGenerator.GetInt32(0,10000).ToString("D4");
 
         EnvironmentName = environmentName;
         IngestionDomain = ingestionDomain;
