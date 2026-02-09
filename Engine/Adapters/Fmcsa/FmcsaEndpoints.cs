@@ -1,7 +1,7 @@
 using Canal.Ingestion.ApiLoader.Model;
 using Canal.Ingestion.ApiLoader.Engine;
 
-namespace Canal.Ingestion.ApiLoader.Engine.Adapters.Fmcsa;
+namespace Canal.Ingestion.ApiLoader.Adapters.Fmcsa;
 
 /// <summary>
 /// FMCSA (Federal Motor Carrier Safety Administration) public data endpoints.

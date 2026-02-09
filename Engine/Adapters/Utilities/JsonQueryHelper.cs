@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Canal.Ingestion.ApiLoader.Engine.Adapters.Utilities;
+namespace Canal.Ingestion.ApiLoader.Adapters.Utilities;
 internal static class JsonQueryHelper
 {
     internal static List<Dictionary<string, string>> QuickQuery(IEnumerable<string> pagesJson, IReadOnlyDictionary<string, string> columnMap, bool distinct, string contentPropertyName = "content")

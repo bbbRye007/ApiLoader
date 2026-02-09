@@ -57,10 +57,9 @@ using Canal.Storage.Adls;
 
 using Canal.Ingestion.ApiLoader.Adapters.TruckerCloud;
 using Canal.Ingestion.ApiLoader.Adapters.Fmcsa;
-using Canal.Ingestion.ApiLoader.Engine.Adapters.TruckerCloud;
-using Canal.Ingestion.ApiLoader.Engine.Adapters.Fmcsa;
 using Canal.Ingestion.ApiLoader.Client;
 using Canal.Ingestion.ApiLoader.Model;
+using Canal.Ingestion.ApiLoader.Storage;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;

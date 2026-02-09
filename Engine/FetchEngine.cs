@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using Canal.Ingestion.ApiLoader.Model;
-using Canal.Ingestion.ApiLoader.Engine.Adapters;
+using Canal.Ingestion.ApiLoader.Adapters;
 using System.Text;
 using Microsoft.Extensions.Logging;
 

@@ -1,7 +1,7 @@
 using System.Net;
 using Canal.Ingestion.ApiLoader.Model;
 
-namespace Canal.Ingestion.ApiLoader.Engine.Adapters;
+namespace Canal.Ingestion.ApiLoader.Adapters;
 
 public interface IVendorAdapter
 {

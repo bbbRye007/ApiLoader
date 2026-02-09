@@ -1,4 +1,4 @@
-using Canal.Ingestion.ApiLoader.Engine.Adapters;
+using Canal.Ingestion.ApiLoader.Adapters;
 using System.Diagnostics.CodeAnalysis;
 using Canal.Ingestion.ApiLoader.Model;
 using Canal.Ingestion.ApiLoader.Storage;

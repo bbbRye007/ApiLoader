@@ -3,7 +3,7 @@ using System.Net;
 using System.Buffers;
 using System.Security.Cryptography;
 using System.Text;
-using Canal.Ingestion.ApiLoader.Engine.Adapters;
+using Canal.Ingestion.ApiLoader.Adapters;
 
 namespace Canal.Ingestion.ApiLoader.Model;
 

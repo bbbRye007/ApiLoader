@@ -3,7 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using Canal.Ingestion.ApiLoader.Engine.Adapters;
+using Canal.Ingestion.ApiLoader.Adapters;
 using Canal.Ingestion.ApiLoader.Model;
 using Microsoft.Extensions.Logging;
 

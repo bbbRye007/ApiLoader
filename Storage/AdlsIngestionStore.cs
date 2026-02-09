@@ -1,8 +1,8 @@
 using System.Text.Json;
 using Azure.Storage.Blobs;
-using Canal.Ingestion.ApiLoader.Storage;
+using Canal.Storage.Adls;
 
-namespace Canal.Storage.Adls;
+namespace Canal.Ingestion.ApiLoader.Storage;
 
 /// <summary>
 /// ADLS-backed implementation of <see cref="IIngestionStore"/>.

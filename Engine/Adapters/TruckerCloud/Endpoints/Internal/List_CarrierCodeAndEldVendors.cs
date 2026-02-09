@@ -1,7 +1,7 @@
 using Canal.Ingestion.ApiLoader.Model;
-using Canal.Ingestion.ApiLoader.Engine.Adapters.Utilities;
+using Canal.Ingestion.ApiLoader.Adapters.Utilities;
 
-namespace Canal.Ingestion.ApiLoader.Engine.Adapters.TruckerCloud.Endpoints.Internal;
+namespace Canal.Ingestion.ApiLoader.Adapters.TruckerCloud.Endpoints.Internal;
 
 internal readonly record struct CarrierCodeAndEldVendorRow(string CarrierCodeType, string CarrierCode, string EldVendor);
 internal static class List_CarrierCodesAndEldVendors

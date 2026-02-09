@@ -1,8 +1,8 @@
-using Canal.Ingestion.ApiLoader.Engine.Adapters.TruckerCloud.Endpoints.Internal;
+using Canal.Ingestion.ApiLoader.Adapters.TruckerCloud.Endpoints.Internal;
 using Canal.Ingestion.ApiLoader.Model;
 using Canal.Ingestion.ApiLoader.Engine;
 
-namespace Canal.Ingestion.ApiLoader.Engine.Adapters.TruckerCloud;
+namespace Canal.Ingestion.ApiLoader.Adapters.TruckerCloud;
 
 public static class TruckerCloudEndpoints
 {

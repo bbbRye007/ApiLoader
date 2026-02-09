@@ -1,4 +1,4 @@
-using Canal.Ingestion.ApiLoader.Engine.Adapters;
+using Canal.Ingestion.ApiLoader.Adapters;
 
 namespace Canal.Ingestion.ApiLoader.Model;
 

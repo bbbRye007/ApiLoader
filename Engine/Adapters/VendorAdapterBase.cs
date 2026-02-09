@@ -4,7 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Canal.Ingestion.ApiLoader.Model;
 
-namespace Canal.Ingestion.ApiLoader.Engine.Adapters;
+namespace Canal.Ingestion.ApiLoader.Adapters;
 
 
 /// <summary>
@@ -14,7 +14,7 @@ namespace Canal.Ingestion.ApiLoader.Engine.Adapters;
 /// <remarks>
 /// Derived adapters focus on vendor behavior (auth, paging, response interpretation) while the host owns transport config (HttpClient).
 /// </remarks>
-internal abstract class VendorAdapterBase: IVendorAdapter
+public abstract class VendorAdapterBase: IVendorAdapter
 {
     protected VendorAdapterBase(HttpClient httpClient)
     {
