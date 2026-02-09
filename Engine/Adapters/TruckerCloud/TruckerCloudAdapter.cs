@@ -189,7 +189,7 @@ internal sealed class TruckerCloudAdapter : VendorAdapterBase, IVendorAdapter
         result.TotalPages = result.TotalPages <= 0 ? 1 : result.TotalPages;
 
         if (result.PageSize is null)
-            result.PageSize = result.Request.Pagination.RequestSize;
+            result.PageSize = result.Request.PageSize;
 
         if (result.TotalElements is null)
         {
@@ -259,14 +259,8 @@ internal sealed class TruckerCloudAdapter : VendorAdapterBase, IVendorAdapter
         if (stepNr <= 0)
             throw new ArgumentOutOfRangeException(nameof(stepNr), "stepNr must be 1-based.");
 
-        // Only inject TruckerCloud paging params when the caller explicitly enabled paging.
-        // Otherwise, endpoints that don't support (or don't want) ?page=&size= get polluted.
-        var pagingEnabled =
-            seedRequest.Pagination.RequestSize.HasValue ||
-            seedRequest.Pagination.NrRequestsAllowedBeforeAbort.HasValue;
-
         // Non-paged endpoints: one-and-done.
-        if (!pagingEnabled)
+        if (!seedRequest.PageSize.HasValue)
         {
             if (stepNr == 1)
             {
@@ -279,30 +273,19 @@ internal sealed class TruckerCloudAdapter : VendorAdapterBase, IVendorAdapter
             return ValueTask.FromResult<Request?>(null);
         }
 
-        // Paged endpoints: step 1 always produces the first page.
+        // TruckerCloud pages are 1-based.
         if (stepNr == 1)
-            return ValueTask.FromResult<Request?>(BuildPagedRequest(seedRequest, pageNr: seedRequest.Pagination.StartIndex));
+            return ValueTask.FromResult<Request?>(BuildPagedRequest(seedRequest, pageNr: 1));
 
         if (previousResult is null || !previousResult.FetchSucceeded)
             return ValueTask.FromResult<Request?>(null);
 
-        var startPage = seedRequest.Pagination.StartIndex;
-
-        var currentPage = previousResult.PageNr > 0 ? previousResult.PageNr : startPage;
+        var currentPage = previousResult.PageNr > 0 ? previousResult.PageNr : 1;
         var totalPages = previousResult.TotalPages <= 0 ? 1 : previousResult.TotalPages;
 
         var nextPage = currentPage + 1;
         if (nextPage > totalPages)
             return ValueTask.FromResult<Request?>(null);
-
-        // Vendor-neutral safety cap: max number of pages to fetch (COUNT), relative to StartPage.
-        if (seedRequest.Pagination.NrRequestsAllowedBeforeAbort.HasValue)
-        {
-            var maxPages = seedRequest.Pagination.NrRequestsAllowedBeforeAbort.Value;
-            var nextIndex = nextPage - startPage + 1; // StartPage => 1
-            if (nextIndex > maxPages) // if we have fetched more than the max number of pages configured, stop querying this endpoint.
-                return ValueTask.FromResult<Request?>(null);
-        }
 
         return ValueTask.FromResult<Request?>(BuildPagedRequest(seedRequest, nextPage));
     }
@@ -315,13 +298,9 @@ internal sealed class TruckerCloudAdapter : VendorAdapterBase, IVendorAdapter
         qp.Remove("page");
         qp.Remove("size");
 
-        if(seedRequest.Pagination != null) {
-            qp["page"] = pageNr.ToString();
+        qp["page"] = pageNr.ToString();
+        qp["size"] = (seedRequest.PageSize ?? DefaultPageSize).ToString();
 
-            var size = seedRequest.Pagination.RequestSize ?? DefaultPageSize;
-            qp["size"] = size.ToString();
-        }
-        
         var result = new Request(
             this,
             resourceName: seedRequest.ResourceName,
@@ -329,10 +308,9 @@ internal sealed class TruckerCloudAdapter : VendorAdapterBase, IVendorAdapter
             route: seedRequest.Route,
             queryParameters: qp,
             requestHeaders: seedRequest.RequestHeaders,
-            pagination: seedRequest.Pagination);
+            pageSize: seedRequest.PageSize);
 
         // SequenceNr is used for stable blob naming / metadata ordering.
-        // For paging, using the actual page number is the most intuitive.
         result.SequenceNr = pageNr;
 
         return result;

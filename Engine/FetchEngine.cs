@@ -67,6 +67,10 @@ public sealed class FetchEngine
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            // MaxPages safety cap: enforced here so adapters don't have to.
+            if (seedRequest.MaxPages.HasValue && stepNr > seedRequest.MaxPages.Value)
+                break;
+
             var nextRequest = await _adapter.GetNextRequestAsync(seedRequest, previous, stepNr, cancellationToken).ConfigureAwait(false);
             if (nextRequest is null) break;
 
@@ -89,7 +93,7 @@ public sealed class FetchEngine
         {
             RequestUri = _adapter.BuildRequestUri(request),
             PageNr = request.SequenceNr,
-            PageSize = request.Pagination.RequestSize
+            PageSize = request.PageSize
         };
 
         request.RequestId = _adapter.ComputeRequestId(request);

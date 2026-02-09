@@ -132,7 +132,7 @@ internal sealed class FmcsaAdapter : VendorAdapterBase, IVendorAdapter
     private static void ApplyPaginationFromRequest(FetchResult result)
     {
         // Defaults
-        var limit = result.Request.Pagination.RequestSize ?? DefaultRequestSize;
+        var limit = result.Request.PageSize ?? DefaultRequestSize;
         var offset = 0;
         if (result.Request.QueryParameters.TryGetValue("$limit", out var limitText) && int.TryParse(limitText, out var parsedLimit) && parsedLimit > 0)
             limit = parsedLimit;
@@ -165,13 +165,9 @@ internal sealed class FmcsaAdapter : VendorAdapterBase, IVendorAdapter
     {
         if (stepNr <= 0)
             throw new ArgumentOutOfRangeException(nameof(stepNr), "stepNr must be 1-based.");
-        // Only inject paging params when the caller explicitly enabled paging.
-        var pagingEnabled =
-          seedRequest.Pagination.RequestSize.HasValue ||
-          seedRequest.Pagination.NrRequestsAllowedBeforeAbort.HasValue;
-          
+
         // Non-paged endpoints: one-and-done.
-        if (!pagingEnabled)
+        if (!seedRequest.PageSize.HasValue)
         {
             if (stepNr == 1)
             {
@@ -182,39 +178,43 @@ internal sealed class FmcsaAdapter : VendorAdapterBase, IVendorAdapter
             return ValueTask.FromResult<Request?>(null);
         }
 
+        var limit = seedRequest.PageSize ?? DefaultRequestSize;
 
-        // Vendor-neutral safety cap: max number of requests to fetch (COUNT).
-        if (seedRequest.Pagination.NrRequestsAllowedBeforeAbort.HasValue && stepNr > seedRequest.Pagination.NrRequestsAllowedBeforeAbort.Value)
-            return ValueTask.FromResult<Request?>(null);
-        var limit = seedRequest.Pagination.RequestSize ?? DefaultRequestSize;
-        // StartIndex is vendor-neutral; for offset-based vendors we interpret it as a 1-based "page start".
-        // Default StartIndex=1 => offset 0.
-        var startOffset = Math.Max(0, (seedRequest.Pagination.StartIndex - 1) * limit);
+        // FMCSA offsets are 0-based.
         if (stepNr == 1)
-            return ValueTask.FromResult<Request?>(BuildPagedRequest(seedRequest, offset: startOffset, limit: limit));
+            return ValueTask.FromResult<Request?>(BuildPagedRequest(seedRequest, offset: 0, limit: limit));
+
         if (previousResult is null || !previousResult.FetchSucceeded)
             return ValueTask.FromResult<Request?>(null);
+
         // Keep fetching until the API returns an "empty" JSON payload.
         var body = InspectBody(previousResult.Content);
         if (body.IsEmpty)
             return ValueTask.FromResult<Request?>(null);
-        var previousOffset = TryGetOffset(previousResult.Request, defaultValue: startOffset);
+
+        var previousOffset = TryGetOffset(previousResult.Request, defaultValue: 0);
         var previousLimit = TryGetLimit(previousResult.Request, defaultValue: limit);
         var nextOffset = checked(previousOffset + previousLimit);
+
         return ValueTask.FromResult<Request?>(BuildPagedRequest(seedRequest, offset: nextOffset, limit: previousLimit));
     }
+
     private static int TryGetOffset(Request req, int defaultValue)
       => req.QueryParameters.TryGetValue("$offset", out var s) && int.TryParse(s, out var v) && v >= 0 ? v : defaultValue;
+
     private static int TryGetLimit(Request req, int defaultValue)
       => req.QueryParameters.TryGetValue("$limit", out var s) && int.TryParse(s, out var v) && v > 0 ? v : defaultValue;
+
     private Request BuildPagedRequest(Request seedRequest, int offset, int limit)
     {
         var qp = new Dictionary<string, string>(seedRequest.QueryParameters, StringComparer.OrdinalIgnoreCase);
+
         // FMCSA paging contract: ?$limit={n}&$offset={n}
         qp.Remove("$limit");
         qp.Remove("$offset");
         qp["$offset"] = offset.ToString();
         qp["$limit"] = limit.ToString();
+
         var result = new Request(
           this,
           resourceName: seedRequest.ResourceName,
@@ -222,10 +222,12 @@ internal sealed class FmcsaAdapter : VendorAdapterBase, IVendorAdapter
           route: seedRequest.Route,
           queryParameters: qp,
           requestHeaders: seedRequest.RequestHeaders,
-          pagination: seedRequest.Pagination);
+          pageSize: seedRequest.PageSize);
+
         // Stable blob naming / ordering:
         // turn offset+limit into a human 1-based page sequence.
         result.SequenceNr = (offset / Math.Max(1, limit)) + 1;
+
         return result;
     }
     #endregion

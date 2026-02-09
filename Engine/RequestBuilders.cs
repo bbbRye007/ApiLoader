@@ -8,9 +8,9 @@ public static class RequestBuilders
     /// <summary>
     /// Single request, no prior data needed. Used by simple paged endpoints (Carriers, Vehicles, all FMCSA, etc).
     /// </summary>
-    public static List<Request> Simple(IVendorAdapter adapter, EndpointDefinition def, PaginatedRequestSettings pagination, LoadParameters _)
+    public static List<Request> Simple(IVendorAdapter adapter, EndpointDefinition def, int? pageSize, LoadParameters _)
     {
-        return [new Request(adapter, def.ResourceName, def.ResourceVersion, pagination: pagination, httpMethod: def.HttpMethod)];
+        return [new Request(adapter, def.ResourceName, def.ResourceVersion, pageSize: pageSize, httpMethod: def.HttpMethod)];
     }
 
     /// <summary>
@@ -19,11 +19,11 @@ public static class RequestBuilders
     /// </summary>
     public static BuildRequestsDelegate CarrierDependent(Func<List<FetchResult>, List<Dictionary<string, string>>> extractRows)
     {
-        return (adapter, def, pagination, parameters) =>
+        return (adapter, def, pageSize, parameters) =>
         {
             ArgumentNullException.ThrowIfNull(parameters.PriorResults, nameof(parameters.PriorResults));
             var rows = extractRows(parameters.PriorResults);
-            return rows.Select(qp => new Request(adapter, def.ResourceName, def.ResourceVersion, pagination: pagination, httpMethod: def.HttpMethod, queryParameters: qp)).ToList();
+            return rows.Select(qp => new Request(adapter, def.ResourceName, def.ResourceVersion, pageSize: pageSize, httpMethod: def.HttpMethod, queryParameters: qp)).ToList();
         };
     }
 
@@ -33,7 +33,7 @@ public static class RequestBuilders
     /// </summary>
     public static BuildRequestsDelegate CarrierAndTimeWindow(Func<List<FetchResult>, List<Dictionary<string, string>>> extractRows, string startParamName = "startTime", string endParamName = "endTime", string timeFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'")
     {
-        return (adapter, def, pagination, parameters) =>
+        return (adapter, def, pageSize, parameters) =>
         {
             ArgumentNullException.ThrowIfNull(parameters.PriorResults, nameof(parameters.PriorResults));
             var rows = extractRows(parameters.PriorResults);
@@ -41,7 +41,7 @@ public static class RequestBuilders
             {
                 qp[startParamName] = parameters.StartUtc!.Value.ToString(timeFormat);
                 qp[endParamName] = parameters.EndUtc!.Value.ToString(timeFormat);
-                return new Request(adapter, def.ResourceName, def.ResourceVersion, pagination: pagination, httpMethod: def.HttpMethod, queryParameters: qp);
+                return new Request(adapter, def.ResourceName, def.ResourceVersion, pageSize: pageSize, httpMethod: def.HttpMethod, queryParameters: qp);
             }).ToList();
         };
     }

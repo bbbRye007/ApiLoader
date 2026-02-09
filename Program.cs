@@ -45,12 +45,10 @@
     For truly bizarre endpoints, write a custom BuildRequestsDelegate inline in the catalog -- the loader never sees the difference.
 
     LIKELY MONKEY WRENCHES:
-        1) The PaginationOptions class is not generalized to handle every concievable pagination shceme out there.
-            So as the Canal.Ingestion.ApiLoader platform grows, PaginationOptions will have to be generalized to suit the requirement of new vendor pagination schemes.
-        2) Most of these types of APIs just use query parameters and/or request headers, but it is possible to come across a vendor that requires these be passed in as part of a request-body.
+        1) Most of these types of APIs just use query parameters and/or request headers, but it is possible to come across a vendor that requires these be passed in as part of a request-body.
             If that happens, work will need to be done to add support for that in the Model classes and the FetchEngine.
 
-        Other than these two possible scenarios, adding a new vendor should not require changes to any code in "vendor-neutral" namespaces.
+        Other than this scenario, adding a new vendor should not require changes to any code in "vendor-neutral" namespaces.
 */
 
 ///////////// MOCK HOST LOGIC //////////////
@@ -144,56 +142,56 @@ using Microsoft.Extensions.Configuration;
 
     // ── FMCSA examples (all simple paged endpoints) ──────────────────────
 
-    // await fmcsa.Create(FmcsaEndpoints.InspectionsPerUnit).Load(maxNrPagesBeforeAbort: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.InsHistAllWithHistory).Load(maxNrPagesBeforeAbort: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.ActPendInsurAllHistory).Load(maxNrPagesBeforeAbort: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.AuthHistoryAllHistory).Load(maxNrPagesBeforeAbort: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.Boc3AllHistory).Load(maxNrPagesBeforeAbort: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.CarrierAllHistory).Load(maxNrPagesBeforeAbort: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.CompanyCensus).Load(maxNrPagesBeforeAbort: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.CrashFile).Load(maxNrPagesBeforeAbort: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.InsurAllHistory).Load(maxNrPagesBeforeAbort: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.InspectionsAndCitations).Load(maxNrPagesBeforeAbort: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.RejectedAllHistory).Load(maxNrPagesBeforeAbort: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.RevocationAllHistory).Load(maxNrPagesBeforeAbort: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.SpecialStudies).Load(maxNrPagesBeforeAbort: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.VehicleInspectionsAndViolations).Load(maxNrPagesBeforeAbort: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.VehicleInspectionFile).Load(maxNrPagesBeforeAbort: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.SmsInputMotorCarrierCensus).Load(maxNrPagesBeforeAbort: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.SmsInputInspection).Load(maxNrPagesBeforeAbort: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.SmsInputViolation).Load(maxNrPagesBeforeAbort: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.SmsInputCrash).Load(maxNrPagesBeforeAbort: 5, cancellationToken: cts.Token);
+    // await fmcsa.Create(FmcsaEndpoints.InspectionsPerUnit).Load(maxPages: 5, cancellationToken: cts.Token);
+    // await fmcsa.Create(FmcsaEndpoints.InsHistAllWithHistory).Load(maxPages: 5, cancellationToken: cts.Token);
+    // await fmcsa.Create(FmcsaEndpoints.ActPendInsurAllHistory).Load(maxPages: 5, cancellationToken: cts.Token);
+    // await fmcsa.Create(FmcsaEndpoints.AuthHistoryAllHistory).Load(maxPages: 5, cancellationToken: cts.Token);
+    // await fmcsa.Create(FmcsaEndpoints.Boc3AllHistory).Load(maxPages: 5, cancellationToken: cts.Token);
+    // await fmcsa.Create(FmcsaEndpoints.CarrierAllHistory).Load(maxPages: 5, cancellationToken: cts.Token);
+    // await fmcsa.Create(FmcsaEndpoints.CompanyCensus).Load(maxPages: 5, cancellationToken: cts.Token);
+    // await fmcsa.Create(FmcsaEndpoints.CrashFile).Load(maxPages: 5, cancellationToken: cts.Token);
+    // await fmcsa.Create(FmcsaEndpoints.InsurAllHistory).Load(maxPages: 5, cancellationToken: cts.Token);
+    // await fmcsa.Create(FmcsaEndpoints.InspectionsAndCitations).Load(maxPages: 5, cancellationToken: cts.Token);
+    // await fmcsa.Create(FmcsaEndpoints.RejectedAllHistory).Load(maxPages: 5, cancellationToken: cts.Token);
+    // await fmcsa.Create(FmcsaEndpoints.RevocationAllHistory).Load(maxPages: 5, cancellationToken: cts.Token);
+    // await fmcsa.Create(FmcsaEndpoints.SpecialStudies).Load(maxPages: 5, cancellationToken: cts.Token);
+    // await fmcsa.Create(FmcsaEndpoints.VehicleInspectionsAndViolations).Load(maxPages: 5, cancellationToken: cts.Token);
+    // await fmcsa.Create(FmcsaEndpoints.VehicleInspectionFile).Load(maxPages: 5, cancellationToken: cts.Token);
+    // await fmcsa.Create(FmcsaEndpoints.SmsInputMotorCarrierCensus).Load(maxPages: 5, cancellationToken: cts.Token);
+    // await fmcsa.Create(FmcsaEndpoints.SmsInputInspection).Load(maxPages: 5, cancellationToken: cts.Token);
+    // await fmcsa.Create(FmcsaEndpoints.SmsInputViolation).Load(maxPages: 5, cancellationToken: cts.Token);
+    // await fmcsa.Create(FmcsaEndpoints.SmsInputCrash).Load(maxPages: 5, cancellationToken: cts.Token);
 
     // return;
 
     // ── TruckerCloud examples ────────────────────────────────────────────
 
-    // DO NOT USE VehicleIgnition (see TruckerCloudEndpoints.VehicleIgnition comment)
+    // DO NOT USE VehicleIgnition (see TruckerCloudEndpoints.VehicleIgnitionV4 comment)
     // For ONE Vehicle the result was a json document 900K lines long! No date parameters to filter by!
 
     // carriers is a required input for dependent endpoints. fetch it first, then pass results as priorResults.
-    var carriers = await tc.Create(TruckerCloudEndpoints.Carriers).Load(cancellationToken: cts.Token, saveBehavior: SaveBehavior.None, saveWatermark: false);
+    var carriers = await tc.Create(TruckerCloudEndpoints.CarriersV4).Load(cancellationToken: cts.Token, saveBehavior: SaveBehavior.None, saveWatermark: false);
     Console.WriteLine(carriers[0].Content);
-    // await tc.Create(TruckerCloudEndpoints.SafetyEvents).Load(priorResults: carriers, overrideStartUtc: DateTimeOffset.Now.AddDays(-30), overrideEndUtc: DateTimeOffset.Now.AddDays(-5), saveWatermark: true, cancellationToken: cts.Token);
-    // await tc.Create(TruckerCloudEndpoints.SafetyEvents).Load(priorResults: carriers, cancellationToken: cts.Token);
+    // await tc.Create(TruckerCloudEndpoints.SafetyEventsV5).Load(priorResults: carriers, overrideStartUtc: DateTimeOffset.Now.AddDays(-30), overrideEndUtc: DateTimeOffset.Now.AddDays(-5), saveWatermark: true, cancellationToken: cts.Token);
+    // await tc.Create(TruckerCloudEndpoints.SafetyEventsV5).Load(priorResults: carriers, cancellationToken: cts.Token);
 
-    // var vehicles = await tc.Create(TruckerCloudEndpoints.Vehicles).Load(cancellationToken: cts.Token, saveBehavior: SaveBehavior.None);
+    // var vehicles = await tc.Create(TruckerCloudEndpoints.VehiclesV4).Load(cancellationToken: cts.Token, saveBehavior: SaveBehavior.None);
 
     // THIS ENDPOINT IS A SLOOOOW!!! FOR ONE out of almost 1000 vehicles...
 
-    // await tc.Create(TruckerCloudEndpoints.GpsMiles).Load(priorResults: carriers, cancellationToken: cts.Token);  // <<-- NOT FOR GENERAL POLLING!!
+    // await tc.Create(TruckerCloudEndpoints.GpsMilesV4).Load(priorResults: carriers, cancellationToken: cts.Token);  // <<-- NOT FOR GENERAL POLLING!!
 
-    // await tc.Create(TruckerCloudEndpoints.ZipCodeMiles).Load(priorResults: carriers, overrideStartUtc: DateTimeOffset.Now.AddDays(-150), overrideEndUtc: DateTimeOffset.Now.AddDays(-90), saveWatermark: true, cancellationToken: cts.Token);
-    // await tc.Create(TruckerCloudEndpoints.RadiusOfOperation).Load(priorResults: carriers, overrideStartUtc: DateTimeOffset.Now.AddDays(-150), overrideEndUtc: DateTimeOffset.Now.AddDays(-90), saveWatermark: true, cancellationToken: cts.Token);
-    // await tc.Create(TruckerCloudEndpoints.GpsMiles).Load(priorResults: carriers, overrideStartUtc: DateTimeOffset.Now.AddDays(-150), overrideEndUtc: DateTimeOffset.Now.AddDays(-90), saveWatermark: true, cancellationToken: cts.Token);
-    // await tc.Create(TruckerCloudEndpoints.Drivers).Load(priorResults: carriers, cancellationToken: cts.Token);
-    // await tc.Create(TruckerCloudEndpoints.RiskScores).Load(priorResults: carriers, cancellationToken: cts.Token);
+    // await tc.Create(TruckerCloudEndpoints.ZipCodeMilesV4).Load(priorResults: carriers, overrideStartUtc: DateTimeOffset.Now.AddDays(-150), overrideEndUtc: DateTimeOffset.Now.AddDays(-90), saveWatermark: true, cancellationToken: cts.Token);
+    // await tc.Create(TruckerCloudEndpoints.RadiusOfOperationV4).Load(priorResults: carriers, overrideStartUtc: DateTimeOffset.Now.AddDays(-150), overrideEndUtc: DateTimeOffset.Now.AddDays(-90), saveWatermark: true, cancellationToken: cts.Token);
+    // await tc.Create(TruckerCloudEndpoints.GpsMilesV4).Load(priorResults: carriers, overrideStartUtc: DateTimeOffset.Now.AddDays(-150), overrideEndUtc: DateTimeOffset.Now.AddDays(-90), saveWatermark: true, cancellationToken: cts.Token);
+    // await tc.Create(TruckerCloudEndpoints.DriversV4).Load(priorResults: carriers, cancellationToken: cts.Token);
+    // await tc.Create(TruckerCloudEndpoints.RiskScoresV4).Load(priorResults: carriers, cancellationToken: cts.Token);
 
     // careful with watermarked (incremental) endpoints:
     // overriding the enddate to 90 days ago while also saving the watermark file will cause the next incremental load to pick up from 90 days ago.
     // for one off backfills, pass param saveWatermark: false
-    // await tc.Create(TruckerCloudEndpoints.ZipCodeMiles).Load(priorResults: carriers, overrideStartUtc: DateTimeOffset.Now.AddDays(-150), overrideEndUtc: DateTimeOffset.Now.AddDays(-90), saveWatermark: true, cancellationToken: cts.Token);
-    // await tc.Create(TruckerCloudEndpoints.ZipCodeMiles).Load(priorResults: carriers, cancellationToken: cts.Token); // normal incremental mode should pick up from 90 days ago through today.
+    // await tc.Create(TruckerCloudEndpoints.ZipCodeMilesV4).Load(priorResults: carriers, overrideStartUtc: DateTimeOffset.Now.AddDays(-150), overrideEndUtc: DateTimeOffset.Now.AddDays(-90), saveWatermark: true, cancellationToken: cts.Token);
+    // await tc.Create(TruckerCloudEndpoints.ZipCodeMilesV4).Load(priorResults: carriers, cancellationToken: cts.Token); // normal incremental mode should pick up from 90 days ago through today.
 
-    // await tc.Create(TruckerCloudEndpoints.RadiusOfOperation).Load(priorResults: carriers, overrideStartUtc: DateTimeOffset.Now.AddDays(-150), overrideEndUtc: DateTimeOffset.Now.AddDays(-90), saveWatermark: true, cancellationToken: cts.Token);
-    // await tc.Create(TruckerCloudEndpoints.RadiusOfOperation).Load(priorResults: carriers, cancellationToken: cts.Token); // normal incremental mode should pick up from 90 days ago through today.
+    // await tc.Create(TruckerCloudEndpoints.RadiusOfOperationV4).Load(priorResults: carriers, overrideStartUtc: DateTimeOffset.Now.AddDays(-150), overrideEndUtc: DateTimeOffset.Now.AddDays(-90), saveWatermark: true, cancellationToken: cts.Token);
+    // await tc.Create(TruckerCloudEndpoints.RadiusOfOperationV4).Load(priorResults: carriers, cancellationToken: cts.Token); // normal incremental mode should pick up from 90 days ago through today.

@@ -36,6 +36,13 @@ public sealed class FetchResult
     public int? TotalElements { get; set; }
     public int? PageSize { get; set; }
 
+    /// <summary>
+    /// Opaque continuation state set by the adapter after a successful fetch.
+    /// For cursor/token APIs: the cursor string. For next-URL APIs: the next URL.
+    /// Null means "no more pages" (page-number/offset adapters that use math can leave this null).
+    /// </summary>
+    public string? ContinuationToken { get; set; }
+
     public string PageId => VendorAdapter.ComputePageId(Request, PageNr);
 
     public DateTimeOffset? RequestedUtc { get; set; }

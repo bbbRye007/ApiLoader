@@ -6,26 +6,26 @@ public sealed class Request
 {
     public Request(IVendorAdapter vendorAdapter, string resourceName, int resourceVersion, string? route = null,
                    IReadOnlyDictionary<string, string>? queryParameters = null, IReadOnlyDictionary<string, string>? requestHeaders = null,
-                   PaginatedRequestSettings? pagination = null, HttpMethod? httpMethod = null, string bodyParamsJson = "{}")
+                   int? pageSize = null, HttpMethod? httpMethod = null, string bodyParamsJson = "{}")
     {
         string vendorAdapter_baseUrl = vendorAdapter.BaseUrl;
         ArgumentNullException.ThrowIfNull(vendorAdapter, nameof(vendorAdapter));
         ArgumentException.ThrowIfNullOrEmpty(vendorAdapter_baseUrl, nameof(vendorAdapter_baseUrl));
         ArgumentException.ThrowIfNullOrEmpty(resourceName, nameof(resourceName));
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(resourceVersion, nameof(resourceVersion));
-        
+
         if(httpMethod != null)
             HttpMethod = httpMethod;
 
         BodyParamsJson = bodyParamsJson;
-        
+
         _vendorAdapter = vendorAdapter;
         ResourceName = resourceName;
         ResourceVersion = resourceVersion;
-        
+
         Route = route ?? resourceName;
 
-        Pagination = pagination ?? PaginatedRequestSettings.None;
+        PageSize = pageSize;
 
         QueryParameters = queryParameters is null
             ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -54,7 +54,17 @@ public sealed class Request
     /// </summary>
     public int SequenceNr { get; set; } = 1;
 
-    public PaginatedRequestSettings Pagination { get; }
+    /// <summary>
+    /// Preferred page size (row limit) if the vendor supports it.
+    /// Null means the endpoint does not paginate (or uses the adapter's built-in default).
+    /// </summary>
+    public int? PageSize { get; }
+
+    /// <summary>
+    /// Maximum number of pages to fetch for this logical request (a safety cap).
+    /// Enforced by <see cref="Engine.FetchEngine"/>, not by individual adapters.
+    /// </summary>
+    public int? MaxPages { get; set; }
 
     public string RequestId { get; set; } = string.Empty;
     public string AttemptId { get; set; } = string.Empty;

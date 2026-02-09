@@ -22,14 +22,12 @@ public class EndpointLoader : EndpointLoaderBase
 
     public async Task<List<FetchResult>> Load(
         List<FetchResult>? priorResults = null, DateTimeOffset? overrideStartUtc = null, DateTimeOffset? overrideEndUtc = null,
-        int? pageSize = null, int? maxNrPagesBeforeAbort = null, SaveBehavior saveBehavior = SaveBehavior.AfterAll, bool saveWatermark = true,
+        int? pageSize = null, int? maxPages = null, SaveBehavior saveBehavior = SaveBehavior.AfterAll, bool saveWatermark = true,
         string bodyParamsJson = "{}", CancellationToken cancellationToken = default)
     {
         InitRun(_definition);
 
         var effectivePageSize = pageSize ?? _definition.DefaultPageSize;
-        var pagination = new PaginatedRequestSettings(startIndex: 0, effectivePageSize);
-        if (maxNrPagesBeforeAbort.HasValue) pagination.NrRequestsAllowedBeforeAbort = maxNrPagesBeforeAbort.Value;
 
         // Resolve time window if this endpoint supports watermarking
         DateTimeOffset? startUtc = null, endUtc = null;
@@ -40,13 +38,20 @@ public class EndpointLoader : EndpointLoaderBase
             startUtc = overrideStartUtc ?? watermarkEnd ?? now.AddDays(_definition.DefaultLookbackDays * -1);
             endUtc = overrideEndUtc ?? now;
 
-            if (endUtc.Value - startUtc.Value < TimeSpan.FromHours(_definition.MinTimeSpanHours)) return [];
+            var timeSpan = endUtc.Value - startUtc.Value;
+            if (_definition.MinTimeSpan.HasValue && timeSpan < _definition.MinTimeSpan.Value) return [];
+            if (_definition.MaxTimeSpan.HasValue && timeSpan > _definition.MaxTimeSpan.Value)
+                endUtc = startUtc.Value + _definition.MaxTimeSpan.Value;
         }
 
         var parameters = new LoadParameters { PriorResults = priorResults, StartUtc = startUtc, EndUtc = endUtc, BodyParamsJson = bodyParamsJson };
 
         // The endpoint definition knows how to build its own requests
-        var requests = _definition.BuildRequests(VendorAdapter, _definition, pagination, parameters);
+        var requests = _definition.BuildRequests(VendorAdapter, _definition, effectivePageSize, parameters);
+
+        // Apply the safety cap to every seed request
+        if (maxPages.HasValue)
+            foreach (var r in requests) r.MaxPages = maxPages.Value;
 
         // When saving per-page, wire up a callback so the engine persists each page as it arrives.
         Func<FetchResult, Task>? onPageFetched = saveBehavior == SaveBehavior.PerPage
