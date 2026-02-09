@@ -185,8 +185,9 @@ internal sealed class TruckerCloudAdapter : VendorAdapterBase, IVendorAdapter
 
         ApplyPaginationFromBody(root, result);
 
-        // Defensive defaults.
-        result.TotalPages = result.TotalPages <= 0 ? 1 : result.TotalPages;
+        // If no pagination section was found, this is a single-page result.
+        if (result.TotalPages is null or <= 0)
+            result.TotalPages = 1;
 
         if (result.PageSize is null)
             result.PageSize = result.Request.PageSize;
@@ -281,7 +282,7 @@ internal sealed class TruckerCloudAdapter : VendorAdapterBase, IVendorAdapter
             return ValueTask.FromResult<Request?>(null);
 
         var currentPage = previousResult.PageNr > 0 ? previousResult.PageNr : 1;
-        var totalPages = previousResult.TotalPages <= 0 ? 1 : previousResult.TotalPages;
+        var totalPages = previousResult.TotalPages is null or <= 0 ? 1 : previousResult.TotalPages.Value;
 
         var nextPage = currentPage + 1;
         if (nextPage > totalPages)
