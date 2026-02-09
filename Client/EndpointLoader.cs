@@ -1,7 +1,7 @@
-using Azure.Storage.Blobs;
 using Canal.Ingestion.ApiLoader.Engine;
 using Canal.Ingestion.ApiLoader.Engine.Adapters;
 using Canal.Ingestion.ApiLoader.Model;
+using Canal.Ingestion.ApiLoader.Storage;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -14,8 +14,8 @@ public class EndpointLoader : EndpointLoaderBase
     private readonly FetchEngine Fetcher;
 
     [SetsRequiredMembers]
-    public EndpointLoader(EndpointDefinition definition, IVendorAdapter vendorAdapter, BlobContainerClient containerClient, string environmentName, int maxDegreeOfParallelism, int maxRetries, int minRetryDelayMs, ILoggerFactory loggerFactory)
-        : base(vendorAdapter, containerClient, environmentName, maxDegreeOfParallelism, maxRetries, minRetryDelayMs, loggerFactory)
+    public EndpointLoader(EndpointDefinition definition, IVendorAdapter vendorAdapter, IIngestionStore store, string environmentName, int maxDegreeOfParallelism, int maxRetries, int minRetryDelayMs, ILoggerFactory loggerFactory)
+        : base(vendorAdapter, store, environmentName, maxDegreeOfParallelism, maxRetries, minRetryDelayMs, loggerFactory)
     {
         _definition = definition ?? throw new ArgumentNullException(nameof(definition));
         Fetcher = new FetchEngine(vendorAdapter, maxDegreeOfParallelism, maxRetries, minRetryDelayMs, loggerFactory.CreateLogger<FetchEngine>());

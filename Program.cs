@@ -126,6 +126,7 @@ using Microsoft.Extensions.Logging;
     */
     var credential = new ClientSecretCredential(adlsTenantId, adlsClientId, adlsClientSecret);
     BlobContainerClient containerClient = ADLSAccess.Create(adlsAccountName, adlsContainerName, credential).ContainerClient;
+    var store = new AdlsIngestionStore(containerClient);
 
 
     // TEST TC ENDPOINTS (HttpClient with Using block, Vendor Adapter, Vendpr EndpointFactory)
@@ -133,7 +134,7 @@ using Microsoft.Extensions.Logging;
     using ( tcHttpClient )
     {
         var tcAdapter = new TruckerCloudAdapter(tcHttpClient, truckerCloudApiUser, truckerCloudApiPassword, loggerFactory.CreateLogger<TruckerCloudAdapter>());
-        var tcEndpoints = new EndpointLoaderFactory(tcAdapter, containerClient, environmentName, maxDop, defaultMaxRetries, minRetryDelayMs, loggerFactory);
+        var tcEndpoints = new EndpointLoaderFactory(tcAdapter, store, environmentName, maxDop, defaultMaxRetries, minRetryDelayMs, loggerFactory);
 
         var now = DateTimeOffset.UtcNow;
         var overMin = now.AddDays(-14);
@@ -159,7 +160,7 @@ using Microsoft.Extensions.Logging;
     using(fmcsaHttpClient)
     {
         var fmcsaAdapter = new FmcsaAdapter(fmcsaHttpClient, loggerFactory.CreateLogger<FmcsaAdapter>());
-        var fmcsaEndpoints = new EndpointLoaderFactory(fmcsaAdapter, containerClient, environmentName, maxDop, defaultMaxRetries, minRetryDelayMs, loggerFactory);
+        var fmcsaEndpoints = new EndpointLoaderFactory(fmcsaAdapter, store, environmentName, maxDop, defaultMaxRetries, minRetryDelayMs, loggerFactory);
         await fmcsaEndpoints.Create(FmcsaEndpoints.InspectionsPerUnit)             .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
         await fmcsaEndpoints.Create(FmcsaEndpoints.InsHistAllWithHistory)          .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
         await fmcsaEndpoints.Create(FmcsaEndpoints.ActPendInsurAllHistory)         .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages

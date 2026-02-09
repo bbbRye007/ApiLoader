@@ -1,8 +1,7 @@
-using Azure.Storage.Blobs;
 using Canal.Ingestion.ApiLoader.Engine.Adapters;
 using System.Diagnostics.CodeAnalysis;
 using Canal.Ingestion.ApiLoader.Model;
-using Canal.Storage.Adls;
+using Canal.Ingestion.ApiLoader.Storage;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
@@ -11,10 +10,10 @@ public abstract class EndpointLoaderBase
 {
 
     [SetsRequiredMembers]
-    public EndpointLoaderBase(IVendorAdapter vendorAdapter, BlobContainerClient containerClient, string environmentName, int maxDegreeOfParallelism, int maxRetries, int minRetryDelayMs, ILoggerFactory loggerFactory)
+    public EndpointLoaderBase(IVendorAdapter vendorAdapter, IIngestionStore store, string environmentName, int maxDegreeOfParallelism, int maxRetries, int minRetryDelayMs, ILoggerFactory loggerFactory)
     {
         VendorAdapter = vendorAdapter;
-        ContainerClient = containerClient;
+        Store = store;
         EnvironmentName = environmentName;
         MaxDegreeOfParallelism = maxDegreeOfParallelism;
         MaxRetries = maxRetries;
@@ -23,7 +22,7 @@ public abstract class EndpointLoaderBase
         Logger = loggerFactory.CreateLogger<EndpointLoaderBase>();
     }
     protected IVendorAdapter VendorAdapter { get; }
-    protected BlobContainerClient ContainerClient { get; init; }
+    protected IIngestionStore Store { get; init; }
     protected string EnvironmentName { get; init; }
     protected int MaxDegreeOfParallelism { get; init; }
     protected int MaxRetries { get; init; }
@@ -45,6 +44,12 @@ public abstract class EndpointLoaderBase
         Definition = definition;
     }
 
+    /// <summary>
+    /// Builds the <see cref="IngestionCoordinates"/> that identify this endpoint's location in storage.
+    /// </summary>
+    protected IngestionCoordinates GetCoordinates(string resourceName, int resourceVersion)
+        => new(EnvironmentName, IsExternalSource, IngestionDomain, VendorName, resourceName, resourceVersion);
+
     public async Task SaveResultsAsync(List<FetchResult> fetchResults, CancellationToken cancellationToken)
     {
         foreach (var r in fetchResults)
@@ -56,14 +61,10 @@ public abstract class EndpointLoaderBase
         Logger.LogInformation("Saving result for {Endpoint} v{Version} page {PageNr} (run {RunId})",
             r.Request.ResourceNameFriendly, r.Request.ResourceVersion, r.PageNr, r.IngestionRun.IngestionRunId);
 
-        await ADLSWriter.SavePayloadAndMetadata(
-            container: ContainerClient,
-            environmentName: r.IngestionRun.EnvironmentName,
-            dataSourceIsExternal: IsExternalSource,
-            ingestionDomain: r.IngestionRun.IngestionDomain,
-            vendorName: r.IngestionRun.VendorName,
-            resourceName: r.Request.ResourceNameFriendly,
-            apiVersion: r.Request.ResourceVersion,
+        var coords = GetCoordinates(r.Request.ResourceNameFriendly, r.Request.ResourceVersion);
+
+        await Store.SaveResultAsync(
+            coords: coords,
             ingestionRunId: r.IngestionRun.IngestionRunId,
             requestId: r.Request.RequestId,
             pageNr: r.PageNr,
@@ -77,20 +78,21 @@ public abstract class EndpointLoaderBase
     {
         Logger.LogInformation("Saving watermark for {Vendor}/{Endpoint} v{Version}", VendorName, ResourceName, ResourceVersion);
 
-        await ADLSWriter.SaveWatermark(ContainerClient, EnvironmentName, IsExternalSource, IngestionDomain, VendorName, ResourceName, ResourceVersion, watermarkJson, cancellationToken)
-                        .ConfigureAwait(false);
+        var coords = GetCoordinates(ResourceName, ResourceVersion);
+
+        await Store.SaveWatermarkAsync(coords, watermarkJson, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<JsonDocument?> LoadWatermarkAsync(CancellationToken cancellationToken)
     {
-        string watermarkPath = ADLSBlobNamer.GetBlobName(BlobCategory.Watermark, EnvironmentName, IsExternalSource, IngestionDomain, VendorName, ResourceName, ResourceVersion);
+        var coords = GetCoordinates(ResourceName, ResourceVersion);
 
-        Logger.LogDebug("Loading watermark from {WatermarkPath}", watermarkPath);
+        Logger.LogDebug("Loading watermark for {Vendor}/{Endpoint} v{Version}", VendorName, ResourceName, ResourceVersion);
 
-        var watermarkJson = await ADLSReader.GetBlobAsJsonAsync(ContainerClient, watermarkPath, cancellationToken).ConfigureAwait(false);
+        var watermarkJson = await Store.LoadWatermarkAsync(coords, cancellationToken).ConfigureAwait(false);
 
         if (watermarkJson is null)
-            Logger.LogDebug("No existing watermark found at {WatermarkPath}", watermarkPath);
+            Logger.LogDebug("No existing watermark found for {Vendor}/{Endpoint} v{Version}", VendorName, ResourceName, ResourceVersion);
 
         return watermarkJson;
     }
