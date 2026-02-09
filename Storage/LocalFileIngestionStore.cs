@@ -12,10 +12,31 @@ public sealed class LocalFileIngestionStore : IIngestionStore
 {
     private readonly string _rootFolder;
 
+    /// <summary>
+    /// The longest path below the root is roughly:
+    ///   {env}/{ext}/{domain}/{vendor}/{resource}/{version}/{runId}/metadata/metadata_{reqId12}_p0001.json
+    /// which is ~170 chars. Keeping the root under 80 leaves headroom for MAX_PATH (260).
+    /// </summary>
+    private const int MaxRootPathLength = 80;
+
+    /// <summary>
+    /// Full SHA256 hex is 64 chars — overkill for a local dev folder.
+    /// 12 hex chars (48 bits) is more than enough to avoid collisions within a single run.
+    /// </summary>
+    private const int RequestIdMaxLength = 12;
+
     public LocalFileIngestionStore(string rootFolder)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(rootFolder, nameof(rootFolder));
-        _rootFolder = rootFolder;
+
+        var fullPath = Path.GetFullPath(rootFolder);
+        if (fullPath.Length > MaxRootPathLength)
+            throw new ArgumentException(
+                $"Root folder path is {fullPath.Length} characters, which exceeds the {MaxRootPathLength}-character limit. " +
+                $"Use a shorter path to avoid Windows MAX_PATH (260) issues. Path: {fullPath}",
+                nameof(rootFolder));
+
+        _rootFolder = fullPath;
     }
 
     public async Task SaveResultAsync(
@@ -27,6 +48,7 @@ public sealed class LocalFileIngestionStore : IIngestionStore
         string metaDataJson,
         CancellationToken cancellationToken = default)
     {
+        var shortRequestId = TruncateRequestId(requestId);
         var versionStr = FormatVersion(coords.ResourceVersion);
         var pageStr = FormatPage(pageNr);
 
@@ -36,11 +58,11 @@ public sealed class LocalFileIngestionStore : IIngestionStore
         Directory.CreateDirectory(metaFolder);
 
         await File.WriteAllTextAsync(
-            Path.Combine(dataFolder, $"data_{requestId}_p{pageStr}.json"),
+            Path.Combine(dataFolder, $"data_{shortRequestId}_p{pageStr}.json"),
             contentJson ?? string.Empty, cancellationToken).ConfigureAwait(false);
 
         await File.WriteAllTextAsync(
-            Path.Combine(metaFolder, $"metadata_{requestId}_p{pageStr}.json"),
+            Path.Combine(metaFolder, $"metadata_{shortRequestId}_p{pageStr}.json"),
             metaDataJson ?? string.Empty, cancellationToken).ConfigureAwait(false);
     }
 
@@ -88,6 +110,12 @@ public sealed class LocalFileIngestionStore : IIngestionStore
     {
         var internalExternal = coords.IsExternalSource ? "external" : "internal";
         return Path.Combine(_rootFolder, coords.EnvironmentName, internalExternal, coords.IngestionDomain, coords.VendorName, coords.ResourceName, versionStr);
+    }
+
+    private static string TruncateRequestId(string requestId)
+    {
+        if (string.IsNullOrEmpty(requestId)) return "unknown";
+        return requestId.Length <= RequestIdMaxLength ? requestId : requestId[..RequestIdMaxLength];
     }
 
     private static string FormatVersion(int version) => version.ToString(CultureInfo.InvariantCulture).PadLeft(4, '0');
