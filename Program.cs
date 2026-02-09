@@ -51,11 +51,6 @@
         Other than this scenario, adding a new vendor should not require changes to any code in "vendor-neutral" namespaces.
 */
 
-///////////// MOCK HOST LOGIC //////////////
-
-/*
-    TODO:
-*/
 using Azure.Identity;
 using Azure.Storage.Blobs;
 using Canal.Storage.Adls;
@@ -97,7 +92,7 @@ using Microsoft.Extensions.Logging;
 
 // BULLD Canal.Ingestion.ApiLoader DEPENDEICIES: CancellationToken, HttpClient, BlobContainerClient, VendorAdapter
 
-    /*  DEPENDENCY 1) Cancellation Token
+    /*  "Cancellation Token"
         Best-effort for handling unexpected shutdown with async operations running
         Triggered on:
             container/service stop (SIGTERM scenarios)
@@ -106,28 +101,21 @@ using Microsoft.Extensions.Logging;
 
         It's a Shutdown race -- the cancellation token may already be disposed by the time ProcessExit/Unloading events fire.
     */
-        using var cts = new CancellationTokenSource(); // Pass cancellation all the way thru like a good developer :D
-        void RequestCancel(){try{ if (!cts.IsCancellationRequested) cts.Cancel(); } catch (ObjectDisposedException) {}}
-        System.Runtime.Loader.AssemblyLoadContext.Default.Unloading += _ => RequestCancel();
-        AppDomain.CurrentDomain.ProcessExit += (_, __) => RequestCancel();
-        Console.CancelKeyPress += (_, e) => { e.Cancel = true; RequestCancel(); };
-        _ = Task.Run(() =>
+    using var cts = new CancellationTokenSource(); // Pass cancellation all the way thru like a good developer :D
+    void RequestCancel(){try{ if (!cts.IsCancellationRequested) cts.Cancel(); } catch (ObjectDisposedException) {}}
+    System.Runtime.Loader.AssemblyLoadContext.Default.Unloading += _ => RequestCancel();
+    AppDomain.CurrentDomain.ProcessExit += (_, __) => RequestCancel();
+    Console.CancelKeyPress += (_, e) => { e.Cancel = true; RequestCancel(); };
+    _ = Task.Run(() =>
+    {
+        while (!cts.IsCancellationRequested)
         {
-            while (!cts.IsCancellationRequested)
-            {
-                var key = Console.ReadKey(intercept: true);
-                if (key.Key is ConsoleKey.Q or ConsoleKey.Escape) { RequestCancel(); break; }
-            }
-        });
+            var key = Console.ReadKey(intercept: true);
+            if (key.Key is ConsoleKey.Q or ConsoleKey.Escape) { RequestCancel(); break; }
+        }
+    });
 
-    /* DEPENDENCY 2) HttpClient
-        is injected because it's a shared transport with connection pooling.
-        The host (the top-level entrypoint that runs the app -- aka Program.cs / container / etc) owns lifetime + policy (timeouts, decompression, proxy/DNS behavior, retries/logging),
-        so adapters stay focused on building requests, and tests can inject a fake client/handler if needed.
-    */
-        using var httpClient = new HttpClient{ Timeout = TimeSpan.FromMinutes(3) };
-
-    /* DEPENDENCY 3) "Azure Stuff" TokenCredential and BlobContainerClient
+    /* "Azure Stuff" TokenCredential and BlobContainerClient
         NOTE: ClientSecretCredential works, but it's not the long-term plan.
         Prefer Managed Identity (Azure) or DefaultAzureCredential (dev/CI) to avoid secret rotation and config leakage.
         Or do --> var credential = new DefaultAzureCredential(); // <<-- when possible
@@ -136,62 +124,60 @@ using Microsoft.Extensions.Logging;
         endpoint/account/container selection, credential choice, retry/logging policy, and lifetime.
         Keeping that out of services/adapters avoids hidden config/secrets and makes storage easy to swap/mock.
     */
-        var credential = new ClientSecretCredential(adlsTenantId, adlsClientId, adlsClientSecret);
-        BlobContainerClient containerClient = ADLSAccess.Create(adlsAccountName, adlsContainerName, credential).ContainerClient;
+    var credential = new ClientSecretCredential(adlsTenantId, adlsClientId, adlsClientSecret);
+    BlobContainerClient containerClient = ADLSAccess.Create(adlsAccountName, adlsContainerName, credential).ContainerClient;
 
-    /* DEPENDENCY 4) VendorAdapter
-        adapter layer owns all the quirks for a given vendor. its feasible fpr one vendor to have multiple adapters if they have some endpoints with certain quirks and other endpoints with other quirks, but "vendor" felt like the right abstraction level during this POC/MVP
-    */
-        var tcAdapter = new TruckerCloudAdapter(httpClient, truckerCloudApiUser, truckerCloudApiPassword, loggerFactory.CreateLogger<TruckerCloudAdapter>());
-        // var fmcsaAdapter = new FmcsaAdapter(httpClient, loggerFactory.CreateLogger<FmcsaAdapter>());
 
-    /*
-        READY TO GO -- create a factory per vendor, then use factory.Create(definition).Load(...) for any endpoint.
-    */
+    // TEST TC ENDPOINTS (HttpClient with Using block, Vendor Adapter, Vendpr EndpointFactory)
+    var tcHttpClient = new HttpClient{ Timeout = TimeSpan.FromMinutes(5) }; // REMEMBER TO WRAP HttpClient in a Using Block!
+    using ( tcHttpClient )
+    {
+        var tcAdapter = new TruckerCloudAdapter(tcHttpClient, truckerCloudApiUser, truckerCloudApiPassword, loggerFactory.CreateLogger<TruckerCloudAdapter>());
+        var tcEndpoints = new EndpointLoaderFactory(tcAdapter, containerClient, environmentName, maxDop, defaultMaxRetries, minRetryDelayMs, loggerFactory);
 
-    var tc = new EndpointLoaderFactory(tcAdapter, containerClient, environmentName, maxDop, defaultMaxRetries, minRetryDelayMs, loggerFactory);
-    // var fmcsa = new EndpointLoaderFactory(fmcsaAdapter, containerClient, environmentName, maxDop, defaultMaxRetries, minRetryDelayMs, loggerFactory);
+        var now = DateTimeOffset.UtcNow;
+        var overMin = now.AddDays(-14);
+        var overMax = now.AddDays(-7);
 
-    // ── FMCSA examples (all simple paged endpoints) ──────────────────────
+        var overMin1D = DateTimeOffset.Parse("2026-02-04");
+        var overMax1D = overMin1D.AddHours(23).AddMinutes(59).AddSeconds(59);
 
-    // await fmcsa.Create(FmcsaEndpoints.InspectionsPerUnit).Load(maxPages: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.InsHistAllWithHistory).Load(maxPages: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.ActPendInsurAllHistory).Load(maxPages: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.AuthHistoryAllHistory).Load(maxPages: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.Boc3AllHistory).Load(maxPages: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.CarrierAllHistory).Load(maxPages: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.CompanyCensus).Load(maxPages: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.CrashFile).Load(maxPages: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.InsurAllHistory).Load(maxPages: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.InspectionsAndCitations).Load(maxPages: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.RejectedAllHistory).Load(maxPages: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.RevocationAllHistory).Load(maxPages: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.SpecialStudies).Load(maxPages: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.VehicleInspectionsAndViolations).Load(maxPages: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.VehicleInspectionFile).Load(maxPages: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.SmsInputMotorCarrierCensus).Load(maxPages: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.SmsInputInspection).Load(maxPages: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.SmsInputViolation).Load(maxPages: 5, cancellationToken: cts.Token);
-    // await fmcsa.Create(FmcsaEndpoints.SmsInputCrash).Load(maxPages: 5, cancellationToken: cts.Token);
+        var carriers =
+        await tcEndpoints.Create(TruckerCloudEndpoints.CarriersV4)         .Load(cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
+        await tcEndpoints.Create(TruckerCloudEndpoints.VehiclesV4)         .Load(cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
+        await tcEndpoints.Create(TruckerCloudEndpoints.DriversV4)          .Load(cancellationToken: cts.Token, iterationList: carriers, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
+        await tcEndpoints.Create(TruckerCloudEndpoints.RiskScoresV4)       .Load(cancellationToken: cts.Token, iterationList: carriers, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
+        await tcEndpoints.Create(TruckerCloudEndpoints.SafetyEventsV5)     .Load(cancellationToken: cts.Token, iterationList: carriers, overrideStartUtc: overMin, overrideEndUtc: overMax, saveWatermark: true, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
+        await tcEndpoints.Create(TruckerCloudEndpoints.RadiusOfOperationV4).Load(cancellationToken: cts.Token, iterationList: carriers, overrideStartUtc: overMin, overrideEndUtc: overMax, saveWatermark: true, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
+        await tcEndpoints.Create(TruckerCloudEndpoints.GpsMilesV4)         .Load(cancellationToken: cts.Token, iterationList: carriers, overrideStartUtc: overMin, overrideEndUtc: overMax, saveWatermark: true, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
+        await tcEndpoints.Create(TruckerCloudEndpoints.ZipCodeMilesV4)     .Load(cancellationToken: cts.Token, iterationList: carriers, overrideStartUtc: overMin, overrideEndUtc: overMax, saveWatermark: true, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
+        await tcEndpoints.Create(TruckerCloudEndpoints.TripsV5)            .Load(cancellationToken: cts.Token, iterationList: carriers, overrideStartUtc: overMin1D, overrideEndUtc: overMax1D, saveWatermark: true, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
+    }
 
-    // return;
+// TEST FMCSA ENDPOINTS (HttpClient with Using block, Vendor Adapter, Vendpr EndpointFactory)
+    var fmcsaHttpClient = new HttpClient{ Timeout = TimeSpan.FromMinutes(5) }; // REMEMBER TO WRAP HttpClient in a Using Block!
+    using(fmcsaHttpClient)
+    {
+        var fmcsaAdapter = new FmcsaAdapter(fmcsaHttpClient, loggerFactory.CreateLogger<FmcsaAdapter>());
+        var fmcsaEndpoints = new EndpointLoaderFactory(fmcsaAdapter, containerClient, environmentName, maxDop, defaultMaxRetries, minRetryDelayMs, loggerFactory);
+        await fmcsaEndpoints.Create(FmcsaEndpoints.InspectionsPerUnit)             .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
+        await fmcsaEndpoints.Create(FmcsaEndpoints.InsHistAllWithHistory)          .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
+        await fmcsaEndpoints.Create(FmcsaEndpoints.ActPendInsurAllHistory)         .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
+        await fmcsaEndpoints.Create(FmcsaEndpoints.AuthHistoryAllHistory)          .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
+        await fmcsaEndpoints.Create(FmcsaEndpoints.Boc3AllHistory)                 .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
+        await fmcsaEndpoints.Create(FmcsaEndpoints.CarrierAllHistory)              .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
+        await fmcsaEndpoints.Create(FmcsaEndpoints.CompanyCensus)                  .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
+        await fmcsaEndpoints.Create(FmcsaEndpoints.CrashFile)                      .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
+        await fmcsaEndpoints.Create(FmcsaEndpoints.InsurAllHistory)                .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
+        await fmcsaEndpoints.Create(FmcsaEndpoints.InspectionsAndCitations)        .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
+        await fmcsaEndpoints.Create(FmcsaEndpoints.RejectedAllHistory)             .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
+        await fmcsaEndpoints.Create(FmcsaEndpoints.RevocationAllHistory)           .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
+        await fmcsaEndpoints.Create(FmcsaEndpoints.SpecialStudies)                 .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
+        await fmcsaEndpoints.Create(FmcsaEndpoints.VehicleInspectionsAndViolations).Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
+        await fmcsaEndpoints.Create(FmcsaEndpoints.VehicleInspectionFile)          .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
+        await fmcsaEndpoints.Create(FmcsaEndpoints.SmsInputMotorCarrierCensus)     .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
+        await fmcsaEndpoints.Create(FmcsaEndpoints.SmsInputInspection)             .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
+        await fmcsaEndpoints.Create(FmcsaEndpoints.SmsInputViolation)              .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
+        await fmcsaEndpoints.Create(FmcsaEndpoints.SmsInputCrash)                  .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
+    }
 
-    // ── TruckerCloud examples ────────────────────────────────────────────
-
-    var now = DateTimeOffset.UtcNow;
-    var overMin = now.AddDays(-14);
-    var overMax = now.AddDays(-7);
-
-    var overMin1D = DateTimeOffset.Parse("2026-02-04");
-    var overMax1D = overMin1D.AddHours(23).AddMinutes(59).AddSeconds(59);
-
-    var carriers =
-    await tc.Create(TruckerCloudEndpoints.CarriersV4).Load(cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
-    await tc.Create(TruckerCloudEndpoints.VehiclesV4).Load(cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
-    await tc.Create(TruckerCloudEndpoints.DriversV4).Load(cancellationToken: cts.Token, iterationList: carriers, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
-    await tc.Create(TruckerCloudEndpoints.RiskScoresV4).Load(cancellationToken: cts.Token, iterationList: carriers, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
-    await tc.Create(TruckerCloudEndpoints.SafetyEventsV5).Load(cancellationToken: cts.Token, iterationList: carriers, overrideStartUtc: overMin, overrideEndUtc: overMax, saveWatermark: true, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
-    await tc.Create(TruckerCloudEndpoints.RadiusOfOperationV4).Load(cancellationToken: cts.Token, iterationList: carriers, overrideStartUtc: overMin, overrideEndUtc: overMax, saveWatermark: true, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
-    await tc.Create(TruckerCloudEndpoints.GpsMilesV4).Load(cancellationToken: cts.Token, iterationList: carriers, overrideStartUtc: overMin, overrideEndUtc: overMax, saveWatermark: true, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
-    await tc.Create(TruckerCloudEndpoints.ZipCodeMilesV4).Load(cancellationToken: cts.Token, iterationList: carriers, overrideStartUtc: overMin, overrideEndUtc: overMax, saveWatermark: true, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
-    await tc.Create(TruckerCloudEndpoints.TripsV5).Load(cancellationToken: cts.Token, iterationList: carriers, overrideStartUtc: overMin1D, overrideEndUtc: overMax1D, saveWatermark: true, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
