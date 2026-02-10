@@ -9,14 +9,27 @@ using Canal.Ingestion.ApiLoader.Host.Commands;
 using Canal.Ingestion.ApiLoader.Host.Configuration;
 using Canal.Ingestion.ApiLoader.Host.Helpers;
 
+using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-// ── 1. Configuration: JSON → env vars  (CLI overrides applied programmatically below) ──
-var config = new ConfigurationBuilder()
-    .AddJsonFile("appsettings.json", optional: true)
-    .AddEnvironmentVariables()
-    .Build();
+// ── 1. Configuration: embedded defaults → external appsettings.json → env vars ──
+//    (CLI overrides applied programmatically below)
+var configBuilder = new ConfigurationBuilder();
+
+// Baked-in defaults from the embedded hostDefaults.json resource
+var defaultsStream = Assembly.GetExecutingAssembly()
+    .GetManifestResourceStream("Canal.Ingestion.ApiLoader.Host.hostDefaults.json");
+if (defaultsStream is not null)
+    configBuilder.AddJsonStream(defaultsStream);
+
+// Optional external file next to the exe — for deploy-time overrides without recompiling
+configBuilder.AddJsonFile("appsettings.json", optional: true);
+
+// Environment variables override both
+configBuilder.AddEnvironmentVariables();
+
+var config = configBuilder.Build();
 
 // ── 2. Bind typed settings from config ──
 var loader = new LoaderSettings();
