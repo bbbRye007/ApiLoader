@@ -9,6 +9,7 @@
     <SelfContained>true</SelfContained>
     <!-- PublishTrimmed disabled until core libraries are trim-safe (JsonSerializer + reflection in FetchMetaData) -->
     <PublishTrimmed>false</PublishTrimmed>
+    <DebugType>embedded</DebugType>
   </PropertyGroup>
 
   <ItemGroup>
