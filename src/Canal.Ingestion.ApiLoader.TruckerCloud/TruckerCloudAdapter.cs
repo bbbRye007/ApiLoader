@@ -3,7 +3,6 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using Canal.Ingestion.ApiLoader.Adapters;
 using Canal.Ingestion.ApiLoader.Model;
 using Microsoft.Extensions.Logging;
 
@@ -17,7 +16,7 @@ namespace Canal.Ingestion.ApiLoader.Adapters.TruckerCloud;
 /// - Defines what gets Redacted in metadata (no secrets allowed in metadata).
 /// - Extracts pagination counters from the JSON response body.
 /// </remarks>
-internal sealed class TruckerCloudAdapter : VendorAdapterBase, IVendorAdapter
+public sealed class TruckerCloudAdapter : VendorAdapterBase, IVendorAdapter
 {
     #region Identity
 

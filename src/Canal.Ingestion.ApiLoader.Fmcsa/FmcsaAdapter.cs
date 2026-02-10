@@ -3,7 +3,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
-using Canal.Ingestion.ApiLoader.Adapters;
 using Canal.Ingestion.ApiLoader.Model;
 using Microsoft.Extensions.Logging;
 
@@ -20,7 +19,7 @@ namespace Canal.Ingestion.ApiLoader.Adapters.Fmcsa;
 /// The API does NOT return pagination counters, so we keep requesting until the body is an empty JSON payload
 /// (typically an empty array) or empty/whitespace.
 /// </remarks>
-internal sealed class FmcsaAdapter : VendorAdapterBase, IVendorAdapter
+public sealed class FmcsaAdapter : VendorAdapterBase, IVendorAdapter
 {
     #region Identity
     private const string VendorNameConst = "Fmcsa";
