@@ -1,183 +1,156 @@
-
-/*
-    Program.cs is throwaway - it's just an example of how to write the actual host layer once these libraries are published as nuget packages.
-
-    TODOS:
-        Use this console app as a starting place to build two class libraries that can be added to projects via nuget
-
-      NOTE - make sure any NEW code follows the async await pattern shown in this POC -- aka always use ConfigureAwait(false):
-        await someAsyncMethod(canecllationToken).ConfigureAwait(false); // This is best practice in async class libraries (no UI to worry about)
-
-      1) add standard logging throughout (following best practices)
-      1) Create Class Library --> Canal.Storage.Adls is small and simple, just a few classes in this namespace
-      2) Create Class Library --> Canal.Ingestion.ApiLoader (but not down to individual vendors) is dependent on Canal.Storage.Adls and contains all the rest of the namespaces (excluing program.cs which currently emulates a host process)
-      3+) Create Class Libraries WITH Vendor Specifics - one per vendor.
-///////// CLEAN UP COMMENTARY^^^^^^^^^^^^^^^^^^^^^
-/// ALSO -- Consider trying to making the engine "stream back" fetch responses so they can be saved to ADLS BEFORE the total batch of fetches is complete..
-/// EXAMPLE -- VehicleIgnition endpoint brings back million plus line json documents.. several minutes per vehicle, 100-ish vehicles means --
-///
-///
-    To get to Production MVP:
-      - Build the MVP Host/Orchestration Layer -- just one or more windows scheduled tasks that call a console app with parameters.
-            New console app called Telematics Fetch requires nuget package Canal.Ingestion.ApiLoader
-
-            -- add logic to the new console app to handle fetching and saving to adls (see below program.cs code for examples of how that works)
-            IMPORTANT (maybe not for day 1, we'll have to talk)
-                DO NOT USE config files to store secrets!!!!!
-                 -- use Azure Key Vault
-
-            1) instantiate and set up cancellation token to pass through all async method calls
-            2) instantiate HttpClient
-            3) instantiate BlobContainerClient containerClient
-            4) instantiate the TruckerCloud vendorAdapter
-            5) instantiate an EndpointLoaderFactory for the vendor
-            6) use factory.Create(EndpointDefinition) to create loaders and call Load()
-*/
-
-/*
-    STEPS TO ADD ANOTHER VENDOR TO THE MIX:
-
-    1) ADD A NEW ADAPTER CLASS RIGHT NEXT TO TruckerCloudAdapter in namespace Canal.Ingestion.ApiLoader.Adapters."NewVendorName"
-    2) Add a static catalog class (like TruckerCloudEndpoints or FmcsaEndpoints) with EndpointDefinition fields for each endpoint
-    3) Use EndpointLoaderFactory + factory.Create(definition).Load(...) to fetch data
-
-    For common patterns (simple paged, carrier-dependent, carrier+time-window), use the built-in RequestBuilders helpers.
-    For truly bizarre endpoints, write a custom BuildRequestsDelegate inline in the catalog -- the loader never sees the difference.
-
-    LIKELY MONKEY WRENCHES:
-        1) Most of these types of APIs just use query parameters and/or request headers, but it is possible to come across a vendor that requires these be passed in as part of a request-body.
-            If that happens, work will need to be done to add support for that in the Model classes and the FetchEngine.
-
-        Other than this scenario, adding a new vendor should not require changes to any code in "vendor-neutral" namespaces.
-*/
-
 using Azure.Identity;
-using Azure.Storage.Blobs;
 using Canal.Storage.Adls;
 
 using Canal.Ingestion.ApiLoader.Adapters.TruckerCloud;
 using Canal.Ingestion.ApiLoader.Adapters.Fmcsa;
 using Canal.Ingestion.ApiLoader.Client;
-using Canal.Ingestion.ApiLoader.Model;
 using Canal.Ingestion.ApiLoader.Storage;
+using Canal.Ingestion.ApiLoader.Host.Commands;
+using Canal.Ingestion.ApiLoader.Host.Configuration;
+using Canal.Ingestion.ApiLoader.Host.Helpers;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-// TODO: Remove config files containing "secrets" - these should be managed with Azure Key Vault
-    var config = new ConfigurationBuilder().AddJsonFile("appsettings.json", optional: false).Build();
 
-// LOGGING: Build a LoggerFactory from config. Console provider writes to stdout during dev.
-// To change log levels without recompiling, add a "Logging" section to appsettings.json.
-    using var loggerFactory = LoggerFactory.Create(builder =>
+// ── 1. Configuration: JSON → env vars  (CLI overrides applied programmatically below) ──
+var config = new ConfigurationBuilder()
+    .AddJsonFile("appsettings.json", optional: true)
+    .AddEnvironmentVariables()
+    .Build();
+
+// ── 2. Bind typed settings from config ──
+var loader = new LoaderSettings();
+config.GetSection("Loader").Bind(loader);
+
+var tcSettings = new TruckerCloudSettings();
+config.GetSection("TruckerCloud").Bind(tcSettings);
+
+var azSettings = new AzureSettings();
+config.GetSection("Azure").Bind(azSettings);
+
+// ── 3. Parse CLI args ──
+var cliArgs = new CliArgs(args);
+var command = cliArgs.Positional(0)?.ToLowerInvariant();
+
+// Show help if no command or --help
+if (command is null or "--help" or "-h" or "help")
+{
+    HelpText.Print();
+    return 0;
+}
+
+// ── 4. CLI overrides (highest precedence) ──
+var envRaw = cliArgs.Option("environment") ?? cliArgs.Option("e");
+if (envRaw is not null) loader.Environment = envRaw;
+
+var storageRaw = cliArgs.Option("storage") ?? cliArgs.Option("s");
+if (storageRaw is not null) loader.Storage = storageRaw;
+
+var localPathRaw = cliArgs.Option("local-storage-path");
+if (localPathRaw is not null) loader.LocalStoragePath = localPathRaw;
+
+var maxDopRaw = cliArgs.IntOption("max-dop");
+if (maxDopRaw.HasValue) loader.MaxDop = maxDopRaw.Value;
+
+var maxRetriesRaw = cliArgs.IntOption("max-retries");
+if (maxRetriesRaw.HasValue) loader.MaxRetries = maxRetriesRaw.Value;
+
+// ── 5. Sanitize environment name for ADLS blob safety ──
+loader.Environment = EnvironmentNameSanitizer.Sanitize(loader.Environment);
+
+// ── 6. Logging ──
+using var loggerFactory = LoggerFactory.Create(builder =>
+{
+    builder.AddConfiguration(config.GetSection("Logging"));
+    builder.AddConsole();
+});
+var hostLogger = loggerFactory.CreateLogger("ApiLoader");
+
+hostLogger.LogInformation("ApiLoader starting — environment={Environment}, storage={Storage}, maxDop={MaxDop}",
+    loader.Environment, loader.Storage, loader.MaxDop);
+
+// ── 7. Cancellation token ──
+using var cts = new CancellationTokenSource();
+void RequestCancel() { try { if (!cts.IsCancellationRequested) cts.Cancel(); } catch (ObjectDisposedException) { } }
+System.Runtime.Loader.AssemblyLoadContext.Default.Unloading += _ => RequestCancel();
+AppDomain.CurrentDomain.ProcessExit += (_, _) => RequestCancel();
+Console.CancelKeyPress += (_, e) => { e.Cancel = true; RequestCancel(); };
+
+// ── 8. Build storage backend ──
+IIngestionStore BuildStore()
+{
+    if (loader.Storage.Equals("file", StringComparison.OrdinalIgnoreCase))
     {
-        builder.AddConfiguration(config.GetSection("Logging"));
-        builder.AddConsole();
-    });
-    var hostLogger = loggerFactory.CreateLogger("Program");
-    hostLogger.LogInformation("Application starting");
-    string truckerCloudApiUser     = config["AppSettings:API_USER"]                 ?? string.Empty;
-    string truckerCloudApiPassword = config["AppSettings:API_PW"]                   ?? string.Empty;
-    string adlsContainerName       = config["AppSettings:AZURE_CONTAINER_NAME"]     ?? string.Empty;
-    string adlsAccountName         = config["Appsettings:AZURE_ACCOUNT_NAME"]       ?? string.Empty;
-    string adlsTenantId            = config["Appsettings:AZURE_TENANT_ETL_ID"]      ?? string.Empty;
-    string adlsClientId            = config["Appsettings:AZURE_CLIENT_ETL_ID"]      ?? string.Empty;
-    string adlsClientSecret        = config["Appsettings:AZURE_CLIENT_ETL_SECRET"]  ?? string.Empty;
-
-    string environmentName        = "POC";
-    int defaultMaxRetries         = 5;
-    int minRetryDelayMs           = 100;
-    int maxDop                    = 8;
-
-
-// BULLD Canal.Ingestion.ApiLoader DEPENDEICIES: CancellationToken, HttpClient, BlobContainerClient, VendorAdapter
-
-    /*  "Cancellation Token"
-        Best-effort for handling unexpected shutdown with async operations running
-        Triggered on:
-            container/service stop (SIGTERM scenarios)
-            process exit
-            CTRL+C or optionally Q or ESC from console (nice in the debugger)
-
-        It's a Shutdown race -- the cancellation token may already be disposed by the time ProcessExit/Unloading events fire.
-    */
-    using var cts = new CancellationTokenSource(); // Pass cancellation all the way thru like a good developer :D
-    void RequestCancel(){try{ if (!cts.IsCancellationRequested) cts.Cancel(); } catch (ObjectDisposedException) {}}
-    System.Runtime.Loader.AssemblyLoadContext.Default.Unloading += _ => RequestCancel();
-    AppDomain.CurrentDomain.ProcessExit += (_, __) => RequestCancel();
-    Console.CancelKeyPress += (_, e) => { e.Cancel = true; RequestCancel(); };
-    _ = Task.Run(() =>
-    {
-        while (!cts.IsCancellationRequested)
-        {
-            var key = Console.ReadKey(intercept: true);
-            if (key.Key is ConsoleKey.Q or ConsoleKey.Escape) { RequestCancel(); break; }
-        }
-    });
-
-    /* "Azure Stuff" TokenCredential and BlobContainerClient
-        NOTE: ClientSecretCredential works, but it's not the long-term plan.
-        Prefer Managed Identity (Azure) or DefaultAzureCredential (dev/CI) to avoid secret rotation and config leakage.
-        Or do --> var credential = new DefaultAzureCredential(); // <<-- when possible
-
-        BlobContainerClient is created in the host layer because the host owns "environment wiring":
-        endpoint/account/container selection, credential choice, retry/logging policy, and lifetime.
-        Keeping that out of services/adapters avoids hidden config/secrets and makes storage easy to swap/mock.
-    */
-    var credential = new ClientSecretCredential(adlsTenantId, adlsClientId, adlsClientSecret);
-    BlobContainerClient containerClient = ADLSAccess.Create(adlsAccountName, adlsContainerName, credential).ContainerClient;
-    var store = new AdlsIngestionStore(containerClient);
-
-
-    // TEST TC ENDPOINTS (HttpClient with Using block, Vendor Adapter, Vendpr EndpointFactory)
-    var tcHttpClient = new HttpClient{ Timeout = TimeSpan.FromMinutes(5) }; // REMEMBER TO WRAP HttpClient in a Using Block!
-    using ( tcHttpClient )
-    {
-        var tcAdapter = new TruckerCloudAdapter(tcHttpClient, truckerCloudApiUser, truckerCloudApiPassword, loggerFactory.CreateLogger<TruckerCloudAdapter>());
-        var tcEndpoints = new EndpointLoaderFactory(tcAdapter, store, environmentName, maxDop, defaultMaxRetries, minRetryDelayMs, loggerFactory);
-
-        var now = DateTimeOffset.UtcNow;
-        var overMin = now.AddDays(-14);
-        var overMax = now.AddDays(-7);
-
-        var overMin1D = DateTimeOffset.Parse("2026-02-04");
-        var overMax1D = overMin1D.AddHours(23).AddMinutes(59).AddSeconds(59);
-
-        var carriers =
-        await tcEndpoints.Create(TruckerCloudEndpoints.CarriersV4)         .Load(cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
-        await tcEndpoints.Create(TruckerCloudEndpoints.VehiclesV4)         .Load(cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
-        await tcEndpoints.Create(TruckerCloudEndpoints.DriversV4)          .Load(cancellationToken: cts.Token, iterationList: carriers, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
-        await tcEndpoints.Create(TruckerCloudEndpoints.RiskScoresV4)       .Load(cancellationToken: cts.Token, iterationList: carriers, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
-        await tcEndpoints.Create(TruckerCloudEndpoints.SafetyEventsV5)     .Load(cancellationToken: cts.Token, iterationList: carriers, overrideStartUtc: overMin, overrideEndUtc: overMax, saveWatermark: true, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
-        await tcEndpoints.Create(TruckerCloudEndpoints.RadiusOfOperationV4).Load(cancellationToken: cts.Token, iterationList: carriers, overrideStartUtc: overMin, overrideEndUtc: overMax, saveWatermark: true, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
-        await tcEndpoints.Create(TruckerCloudEndpoints.GpsMilesV4)         .Load(cancellationToken: cts.Token, iterationList: carriers, overrideStartUtc: overMin, overrideEndUtc: overMax, saveWatermark: true, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
-        await tcEndpoints.Create(TruckerCloudEndpoints.ZipCodeMilesV4)     .Load(cancellationToken: cts.Token, iterationList: carriers, overrideStartUtc: overMin, overrideEndUtc: overMax, saveWatermark: true, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
-        await tcEndpoints.Create(TruckerCloudEndpoints.TripsV5)            .Load(cancellationToken: cts.Token, iterationList: carriers, overrideStartUtc: overMin1D, overrideEndUtc: overMax1D, saveWatermark: true, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
+        hostLogger.LogInformation("Using local file storage at {Path}", loader.LocalStoragePath);
+        return new LocalFileIngestionStore(loader.LocalStoragePath);
     }
 
-// TEST FMCSA ENDPOINTS (HttpClient with Using block, Vendor Adapter, Vendpr EndpointFactory)
-    var fmcsaHttpClient = new HttpClient{ Timeout = TimeSpan.FromMinutes(5) }; // REMEMBER TO WRAP HttpClient in a Using Block!
-    using(fmcsaHttpClient)
+    // Default: ADLS
+    var credential = new ClientSecretCredential(azSettings.TenantId, azSettings.ClientId, azSettings.ClientSecret);
+    var containerClient = ADLSAccess.Create(azSettings.AccountName, azSettings.ContainerName, credential).ContainerClient;
+    return new AdlsIngestionStore(containerClient);
+}
+
+// ── 9. Build factory for a vendor ──
+// HttpClient lifetime: CLI app is short-lived — one command per run, then the process exits.
+// Each factory gets its own HttpClient that lives for the duration of the command.
+EndpointLoaderFactory BuildFactory(string vendor, IIngestionStore store)
+{
+    var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+
+    if (vendor.Equals("truckercloud", StringComparison.OrdinalIgnoreCase))
     {
-        var fmcsaAdapter = new FmcsaAdapter(fmcsaHttpClient, loggerFactory.CreateLogger<FmcsaAdapter>());
-        var fmcsaEndpoints = new EndpointLoaderFactory(fmcsaAdapter, store, environmentName, maxDop, defaultMaxRetries, minRetryDelayMs, loggerFactory);
-        await fmcsaEndpoints.Create(FmcsaEndpoints.InspectionsPerUnit)             .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
-        await fmcsaEndpoints.Create(FmcsaEndpoints.InsHistAllWithHistory)          .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
-        await fmcsaEndpoints.Create(FmcsaEndpoints.ActPendInsurAllHistory)         .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
-        await fmcsaEndpoints.Create(FmcsaEndpoints.AuthHistoryAllHistory)          .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
-        await fmcsaEndpoints.Create(FmcsaEndpoints.Boc3AllHistory)                 .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
-        await fmcsaEndpoints.Create(FmcsaEndpoints.CarrierAllHistory)              .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
-        await fmcsaEndpoints.Create(FmcsaEndpoints.CompanyCensus)                  .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
-        await fmcsaEndpoints.Create(FmcsaEndpoints.CrashFile)                      .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
-        await fmcsaEndpoints.Create(FmcsaEndpoints.InsurAllHistory)                .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
-        await fmcsaEndpoints.Create(FmcsaEndpoints.InspectionsAndCitations)        .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
-        await fmcsaEndpoints.Create(FmcsaEndpoints.RejectedAllHistory)             .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
-        await fmcsaEndpoints.Create(FmcsaEndpoints.RevocationAllHistory)           .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
-        await fmcsaEndpoints.Create(FmcsaEndpoints.SpecialStudies)                 .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
-        await fmcsaEndpoints.Create(FmcsaEndpoints.VehicleInspectionsAndViolations).Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
-        await fmcsaEndpoints.Create(FmcsaEndpoints.VehicleInspectionFile)          .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
-        await fmcsaEndpoints.Create(FmcsaEndpoints.SmsInputMotorCarrierCensus)     .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
-        await fmcsaEndpoints.Create(FmcsaEndpoints.SmsInputInspection)             .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
-        await fmcsaEndpoints.Create(FmcsaEndpoints.SmsInputViolation)              .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
-        await fmcsaEndpoints.Create(FmcsaEndpoints.SmsInputCrash)                  .Load(maxPages: 5, cancellationToken: cts.Token, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false); // first 5 pages
+        var adapter = new TruckerCloudAdapter(httpClient, tcSettings.ApiUser, tcSettings.ApiPassword, loggerFactory.CreateLogger<TruckerCloudAdapter>());
+        return new EndpointLoaderFactory(adapter, store, loader.Environment, loader.MaxDop, loader.MaxRetries, loader.MinRetryDelayMs, loggerFactory);
     }
 
+    if (vendor.Equals("fmcsa", StringComparison.OrdinalIgnoreCase))
+    {
+        var adapter = new FmcsaAdapter(httpClient, loggerFactory.CreateLogger<FmcsaAdapter>());
+        return new EndpointLoaderFactory(adapter, store, loader.Environment, loader.MaxDop, loader.MaxRetries, loader.MinRetryDelayMs, loggerFactory);
+    }
+
+    throw new InvalidOperationException($"Unknown vendor '{vendor}'. Known vendors: {string.Join(", ", EndpointRegistry.Vendors)}");
+}
+
+// ── 10. Route to command ──
+// Strip the command name from args so sub-commands see clean positional args
+var subArgs = args.Length > 1 ? new CliArgs(args[1..]) : new CliArgs([]);
+
+try
+{
+    return command switch
+    {
+        "list" => ListCommand.Run(subArgs),
+
+        "load" => await LoadCommand.RunAsync(
+            subArgs,
+            BuildFactory(subArgs.Positional(0) ?? "", BuildStore()),
+            hostLogger,
+            cts.Token).ConfigureAwait(false),
+
+        "test" => await TestCommand.RunAsync(
+            subArgs,
+            vendor => BuildFactory(vendor, BuildStore()),
+            hostLogger,
+            cts.Token).ConfigureAwait(false),
+
+        _ => Error($"Unknown command '{command}'. Run 'apiloader --help' for usage.")
+    };
+}
+catch (OperationCanceledException)
+{
+    hostLogger.LogWarning("Operation cancelled.");
+    return 130;
+}
+catch (Exception ex)
+{
+    hostLogger.LogError(ex, "Unhandled error.");
+    return 1;
+}
+
+static int Error(string message)
+{
+    Console.Error.WriteLine(message);
+    return 1;
+}
