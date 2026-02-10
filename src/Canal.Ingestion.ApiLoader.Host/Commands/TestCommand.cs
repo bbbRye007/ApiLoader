@@ -33,6 +33,10 @@ public static class TestCommand
             var overMin = now.AddDays(-14);
             var overMax = now.AddDays(-7);
 
+            // TripsV5 max time span is ~24 hours — needs its own window
+            var tripsStart = now.AddDays(-1).Date;  // midnight yesterday UTC
+            var tripsEnd   = tripsStart.AddHours(23).AddMinutes(59).AddSeconds(59);
+
             var carriers =
             await tc.Create(TruckerCloudEndpoints.CarriersV4)         .Load(cancellationToken: ct, maxPages: maxPages, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
             await tc.Create(TruckerCloudEndpoints.VehiclesV4)         .Load(cancellationToken: ct, maxPages: maxPages, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
@@ -42,7 +46,7 @@ public static class TestCommand
             await tc.Create(TruckerCloudEndpoints.RadiusOfOperationV4).Load(cancellationToken: ct, maxPages: maxPages, iterationList: carriers, overrideStartUtc: overMin, overrideEndUtc: overMax, saveWatermark: true, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
             await tc.Create(TruckerCloudEndpoints.GpsMilesV4)         .Load(cancellationToken: ct, maxPages: maxPages, iterationList: carriers, overrideStartUtc: overMin, overrideEndUtc: overMax, saveWatermark: true, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
             await tc.Create(TruckerCloudEndpoints.ZipCodeMilesV4)     .Load(cancellationToken: ct, maxPages: maxPages, iterationList: carriers, overrideStartUtc: overMin, overrideEndUtc: overMax, saveWatermark: true, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
-            await tc.Create(TruckerCloudEndpoints.TripsV5)            .Load(cancellationToken: ct, maxPages: maxPages, iterationList: carriers, overrideStartUtc: overMin, overrideEndUtc: overMax, saveWatermark: true, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
+            await tc.Create(TruckerCloudEndpoints.TripsV5)            .Load(cancellationToken: ct, maxPages: maxPages, iterationList: carriers, overrideStartUtc: tripsStart, overrideEndUtc: tripsEnd, saveWatermark: true, saveBehavior: SaveBehavior.PerPage).ConfigureAwait(false);
         }
 
         if (runFmcsa)
