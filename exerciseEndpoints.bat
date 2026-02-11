@@ -3,6 +3,7 @@ setlocal
 echo ============================================================
 echo   ApiLoader CLI Exercise Script
 echo   Uses --storage file (local) so no Azure credentials needed
+echo   Output: C:\Temp\ApiLoaderOutput
 echo ============================================================
 echo.
 
@@ -18,7 +19,14 @@ if not exist "%EXE%" (
 set COMMON=--storage file --environment EXERCISE
 
 echo.
-echo === 1. HELP ===
+echo ************************************************************
+echo   PHASE 1: DISCOVERY (no API calls, no data fetched)
+echo ************************************************************
+echo.
+pause
+
+echo.
+echo --- Help ---
 echo.
 "%EXE%" --help
 echo.
@@ -26,7 +34,7 @@ echo ─────────────────────────
 pause
 
 echo.
-echo === 2. LIST — all vendors ===
+echo --- List all vendors ---
 echo.
 "%EXE%" list
 echo.
@@ -34,7 +42,7 @@ echo ─────────────────────────
 pause
 
 echo.
-echo === 3. LIST — TruckerCloud verbose ===
+echo --- List TruckerCloud endpoints (verbose) ---
 echo.
 "%EXE%" list --vendor truckercloud --verbose
 echo.
@@ -42,7 +50,7 @@ echo ─────────────────────────
 pause
 
 echo.
-echo === 4. LIST — FMCSA verbose ===
+echo --- List FMCSA endpoints (verbose) ---
 echo.
 "%EXE%" list --vendor fmcsa --verbose
 echo.
@@ -50,7 +58,14 @@ echo ─────────────────────────
 pause
 
 echo.
-echo === 5. DRY RUN — load truckercloud DriversV4 (shows dependency chain) ===
+echo ************************************************************
+echo   PHASE 2: DRY RUNS (no API calls — previews what WOULD happen)
+echo ************************************************************
+echo.
+pause
+
+echo.
+echo --- DriversV4: shows CarriersV4 dependency chain ---
 echo.
 "%EXE%" load truckercloud DriversV4 %COMMON% --dry-run
 echo.
@@ -58,7 +73,7 @@ echo ─────────────────────────
 pause
 
 echo.
-echo === 6. DRY RUN — load truckercloud TripsV5 (shows dependency chain + dates) ===
+echo --- TripsV5: dependency chain + 1-day date window ---
 echo.
 "%EXE%" load truckercloud TripsV5 %COMMON% --start "01/15/2026" --end "01/15/2026 23:59:59" --dry-run
 echo.
@@ -66,7 +81,7 @@ echo ─────────────────────────
 pause
 
 echo.
-echo === 7. DRY RUN — load truckercloud SafetyEventsV5 with date range ===
+echo --- SafetyEventsV5: dependency chain + week-long date range ---
 echo.
 "%EXE%" load truckercloud SafetyEventsV5 %COMMON% --start 2026-01-01 --end 2026-01-07 --dry-run
 echo.
@@ -74,7 +89,7 @@ echo ─────────────────────────
 pause
 
 echo.
-echo === 8. DRY RUN — load fmcsa CompanyCensus (no dependencies) ===
+echo --- FMCSA CompanyCensus: no dependencies ---
 echo.
 "%EXE%" load fmcsa CompanyCensus %COMMON% --max-pages 2 --dry-run
 echo.
@@ -82,7 +97,15 @@ echo ─────────────────────────
 pause
 
 echo.
-echo === 9. LOAD — truckercloud CarriersV4 (1 page, local file storage) ===
+echo ************************************************************
+echo   PHASE 3: LIVE LOADS (calls APIs, saves to local files)
+echo   Output goes to: C:\Temp\ApiLoaderOutput
+echo ************************************************************
+echo.
+pause
+
+echo.
+echo --- Load truckercloud CarriersV4 (1 page) ---
 echo.
 "%EXE%" load truckercloud CarriersV4 %COMMON% --max-pages 1
 echo.
@@ -90,7 +113,7 @@ echo ─────────────────────────
 pause
 
 echo.
-echo === 10. LOAD — fmcsa CompanyCensus (1 page, local file storage) ===
+echo --- Load fmcsa CompanyCensus (1 page) ---
 echo.
 "%EXE%" load fmcsa CompanyCensus %COMMON% --max-pages 1
 echo.
@@ -98,7 +121,7 @@ echo ─────────────────────────
 pause
 
 echo.
-echo === 11. TEST — fmcsa only, 1 page each (local file storage) ===
+echo --- Test suite: fmcsa only, 1 page each ---
 echo.
 "%EXE%" test --vendor fmcsa %COMMON% --max-pages 1
 echo.
@@ -106,8 +129,9 @@ echo ─────────────────────────
 pause
 
 echo.
-echo === DONE ===
-echo.
-echo Output was saved to: %~dp0ingestion-output
+echo ************************************************************
+echo   DONE
+echo   Output was saved to: C:\Temp\ApiLoaderOutput
+echo ************************************************************
 echo.
 pause

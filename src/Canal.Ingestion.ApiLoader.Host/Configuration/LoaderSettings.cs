@@ -10,5 +10,5 @@ public sealed class LoaderSettings
     public bool SaveWatermark { get; set; } = true;
     public int LookbackDays { get; set; } = 90;
     public string Storage { get; set; } = "adls";
-    public string LocalStoragePath { get; set; } = "./ingestion-output";
+    public string LocalStoragePath { get; set; } = @"C:\Temp\ApiLoaderOutput";
 }
