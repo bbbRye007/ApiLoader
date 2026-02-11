@@ -10,8 +10,8 @@ echo.
 if "%~1"=="" (
     echo Usage: exerciseEndpoints.bat ^<TC_UserName^> ^<TC_Password^>
     echo.
-    echo   Phase 1 (discovery) and Phase 2 (dry runs) work without credentials.
-    echo   Phase 3 (live loads) requires TruckerCloud API credentials.
+    echo   Phase 1 [discovery] and Phase 2 [dry runs] work without credentials.
+    echo   Phase 3 [live loads] requires TruckerCloud API credentials.
     echo.
     echo Example: exerciseEndpoints.bat myApiUser myApiPassword
     pause
