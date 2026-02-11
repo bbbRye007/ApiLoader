@@ -7,6 +7,20 @@ echo   Output: C:\Temp\ApiLoaderOutput
 echo ============================================================
 echo.
 
+if "%~1"=="" (
+    echo Usage: exerciseEndpoints.bat ^<TC_UserName^> ^<TC_Password^>
+    echo.
+    echo   Phase 1 (discovery) and Phase 2 (dry runs) work without credentials.
+    echo   Phase 3 (live loads) requires TruckerCloud API credentials.
+    echo.
+    echo Example: exerciseEndpoints.bat myApiUser myApiPassword
+    pause
+    exit /b 1
+)
+
+set TruckerCloud__ApiUser=%~1
+set TruckerCloud__ApiPassword=%~2
+
 set EXE=%~dp0publish\Canal.Ingestion.ApiLoader.Host.exe
 
 if not exist "%EXE%" (
