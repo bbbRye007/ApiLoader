@@ -33,7 +33,7 @@ echo.
 "%EXE%" --help
 if %ERRORLEVEL% NEQ 0 ( echo. & echo *** FAILED [exit code %ERRORLEVEL%] *** & set FAIL=1 )
 echo.
-echo ────────────────────────────────────────────────────────────
+echo ------------------------------------------------------------
 pause
 
 echo.
@@ -43,7 +43,7 @@ echo.
 "%EXE%" list
 if %ERRORLEVEL% NEQ 0 ( echo. & echo *** FAILED [exit code %ERRORLEVEL%] *** & set FAIL=1 )
 echo.
-echo ────────────────────────────────────────────────────────────
+echo ------------------------------------------------------------
 pause
 
 echo.
@@ -53,7 +53,7 @@ echo.
 "%EXE%" list --vendor truckercloud --verbose
 if %ERRORLEVEL% NEQ 0 ( echo. & echo *** FAILED [exit code %ERRORLEVEL%] *** & set FAIL=1 )
 echo.
-echo ────────────────────────────────────────────────────────────
+echo ------------------------------------------------------------
 pause
 
 echo.
@@ -63,12 +63,12 @@ echo.
 "%EXE%" list --vendor fmcsa --verbose
 if %ERRORLEVEL% NEQ 0 ( echo. & echo *** FAILED [exit code %ERRORLEVEL%] *** & set FAIL=1 )
 echo.
-echo ────────────────────────────────────────────────────────────
+echo ------------------------------------------------------------
 pause
 
 echo.
 echo ************************************************************
-echo   PHASE 2: DRY RUNS (no API calls — previews what WOULD happen)
+echo   PHASE 2: DRY RUNS (no API calls --previews what WOULD happen)
 echo ************************************************************
 echo.
 pause
@@ -80,7 +80,7 @@ echo.
 "%EXE%" load truckercloud DriversV4 %COMMON% --dry-run
 if %ERRORLEVEL% NEQ 0 ( echo. & echo *** FAILED [exit code %ERRORLEVEL%] *** & set FAIL=1 )
 echo.
-echo ────────────────────────────────────────────────────────────
+echo ------------------------------------------------------------
 pause
 
 echo.
@@ -90,7 +90,7 @@ echo.
 "%EXE%" load truckercloud TripsV5 %COMMON% --start "01/15/2026" --end "01/15/2026 23:59:59" --dry-run
 if %ERRORLEVEL% NEQ 0 ( echo. & echo *** FAILED [exit code %ERRORLEVEL%] *** & set FAIL=1 )
 echo.
-echo ────────────────────────────────────────────────────────────
+echo ------------------------------------------------------------
 pause
 
 echo.
@@ -100,7 +100,7 @@ echo.
 "%EXE%" load truckercloud SafetyEventsV5 %COMMON% --start 2026-01-01 --end 2026-01-07 --dry-run
 if %ERRORLEVEL% NEQ 0 ( echo. & echo *** FAILED [exit code %ERRORLEVEL%] *** & set FAIL=1 )
 echo.
-echo ────────────────────────────────────────────────────────────
+echo ------------------------------------------------------------
 pause
 
 echo.
@@ -110,7 +110,7 @@ echo.
 "%EXE%" load fmcsa CompanyCensus %COMMON% --max-pages 2 --dry-run
 if %ERRORLEVEL% NEQ 0 ( echo. & echo *** FAILED [exit code %ERRORLEVEL%] *** & set FAIL=1 )
 echo.
-echo ────────────────────────────────────────────────────────────
+echo ------------------------------------------------------------
 pause
 
 echo.
@@ -128,7 +128,7 @@ echo.
 "%EXE%" load truckercloud CarriersV4 %COMMON% --max-pages 1
 if %ERRORLEVEL% NEQ 0 ( echo. & echo *** FAILED [exit code %ERRORLEVEL%] *** & set FAIL=1 )
 echo.
-echo ────────────────────────────────────────────────────────────
+echo ------------------------------------------------------------
 pause
 
 echo.
@@ -138,7 +138,7 @@ echo.
 "%EXE%" load fmcsa CompanyCensus %COMMON% --max-pages 1
 if %ERRORLEVEL% NEQ 0 ( echo. & echo *** FAILED [exit code %ERRORLEVEL%] *** & set FAIL=1 )
 echo.
-echo ────────────────────────────────────────────────────────────
+echo ------------------------------------------------------------
 pause
 
 echo.
@@ -148,15 +148,15 @@ echo.
 "%EXE%" test --vendor fmcsa %COMMON% --max-pages 1
 if %ERRORLEVEL% NEQ 0 ( echo. & echo *** FAILED [exit code %ERRORLEVEL%] *** & set FAIL=1 )
 echo.
-echo ────────────────────────────────────────────────────────────
+echo ------------------------------------------------------------
 pause
 
 echo.
 echo ************************************************************
 if %FAIL% EQU 1 (
-    echo   DONE — ONE OR MORE STEPS FAILED (see above)
+    echo   DONE --ONE OR MORE STEPS FAILED (see above)
 ) else (
-    echo   DONE — ALL STEPS PASSED
+    echo   DONE --ALL STEPS PASSED
 )
 echo   Output was saved to: C:\Temp\ApiLoaderOutput
 echo ************************************************************
