@@ -18,8 +18,8 @@ if "%~1"=="" (
     exit /b 1
 )
 
-set TruckerCloud__ApiUser=%~1
-set TruckerCloud__ApiPassword=%~2
+set "TruckerCloud__ApiUser=%~1"
+set "TruckerCloud__ApiPassword=%~2"
 
 set EXE=%~dp0publish\Canal.Ingestion.ApiLoader.Host.exe
 
