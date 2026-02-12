@@ -8,7 +8,8 @@
     "SaveWatermark": true,
     "LookbackDays": 90,
     "Storage": "adls",
-    "LocalStoragePath": "C:\\Temp\\ApiLoaderOutput"
+    "LocalStoragePath": "C:\\Temp\\ApiLoaderOutput",
+    "EventPublisher": "none"
   },
   "TruckerCloud": {
     "ApiUser": "",

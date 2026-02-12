@@ -4,6 +4,7 @@ using Canal.Storage.Adls;
 using Canal.Ingestion.ApiLoader.Adapters.TruckerCloud;
 using Canal.Ingestion.ApiLoader.Adapters.Fmcsa;
 using Canal.Ingestion.ApiLoader.Client;
+using Canal.Ingestion.ApiLoader.Events;
 using Canal.Ingestion.ApiLoader.Storage;
 using Canal.Ingestion.ApiLoader.Host.Commands;
 using Canal.Ingestion.ApiLoader.Host.Configuration;
@@ -68,6 +69,9 @@ if (maxDopRaw.HasValue) loader.MaxDop = maxDopRaw.Value;
 var maxRetriesRaw = cliArgs.IntOption("max-retries");
 if (maxRetriesRaw.HasValue) loader.MaxRetries = maxRetriesRaw.Value;
 
+var eventPublisherRaw = cliArgs.Option("event-publisher");
+if (eventPublisherRaw is not null) loader.EventPublisher = eventPublisherRaw;
+
 // ── 5. Sanitize environment name for ADLS blob safety ──
 loader.Environment = EnvironmentNameSanitizer.Sanitize(loader.Environment);
 
@@ -104,23 +108,36 @@ IIngestionStore BuildStore()
     return new AdlsIngestionStore(containerClient);
 }
 
+// ── 8b. Build event publisher ──
+IEventPublisher BuildEventPublisher()
+{
+    if (loader.EventPublisher.Equals("log", StringComparison.OrdinalIgnoreCase))
+    {
+        hostLogger.LogInformation("Event publishing enabled (log)");
+        return new LoggingEventPublisher(loggerFactory.CreateLogger("Canal.Eventing"));
+    }
+
+    // Default: no-op — zero overhead when no broker is configured
+    return NullEventPublisher.Instance;
+}
+
 // ── 9. Build factory for a vendor ──
 // HttpClient lifetime: CLI app is short-lived — one command per run, then the process exits.
 // Each factory gets its own HttpClient that lives for the duration of the command.
-EndpointLoaderFactory BuildFactory(string vendor, IIngestionStore store)
+EndpointLoaderFactory BuildFactory(string vendor, IIngestionStore store, IEventPublisher eventPublisher)
 {
     var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
 
     if (vendor.Equals("truckercloud", StringComparison.OrdinalIgnoreCase))
     {
         var adapter = new TruckerCloudAdapter(httpClient, tcSettings.ApiUser, tcSettings.ApiPassword, loggerFactory.CreateLogger<TruckerCloudAdapter>());
-        return new EndpointLoaderFactory(adapter, store, loader.Environment, loader.MaxDop, loader.MaxRetries, loader.MinRetryDelayMs, loggerFactory);
+        return new EndpointLoaderFactory(adapter, store, eventPublisher, loader.Environment, loader.MaxDop, loader.MaxRetries, loader.MinRetryDelayMs, loggerFactory);
     }
 
     if (vendor.Equals("fmcsa", StringComparison.OrdinalIgnoreCase))
     {
         var adapter = new FmcsaAdapter(httpClient, loggerFactory.CreateLogger<FmcsaAdapter>());
-        return new EndpointLoaderFactory(adapter, store, loader.Environment, loader.MaxDop, loader.MaxRetries, loader.MinRetryDelayMs, loggerFactory);
+        return new EndpointLoaderFactory(adapter, store, eventPublisher, loader.Environment, loader.MaxDop, loader.MaxRetries, loader.MinRetryDelayMs, loggerFactory);
     }
 
     throw new InvalidOperationException($"Unknown vendor '{vendor}'. Known vendors: {string.Join(", ", EndpointRegistry.Vendors)}");
@@ -132,19 +149,21 @@ var subArgs = args.Length > 1 ? new CliArgs(args[1..]) : new CliArgs([]);
 
 try
 {
+    var eventPublisher = BuildEventPublisher();
+
     return command switch
     {
         "list" => ListCommand.Run(subArgs),
 
         "load" => await LoadCommand.RunAsync(
             subArgs,
-            BuildFactory(subArgs.Positional(0) ?? "", BuildStore()),
+            BuildFactory(subArgs.Positional(0) ?? "", BuildStore(), eventPublisher),
             hostLogger,
             cts.Token).ConfigureAwait(false),
 
         "test" => await TestCommand.RunAsync(
             subArgs,
-            vendor => BuildFactory(vendor, BuildStore()),
+            vendor => BuildFactory(vendor, BuildStore(), eventPublisher),
             hostLogger,
             cts.Token).ConfigureAwait(false),
 
