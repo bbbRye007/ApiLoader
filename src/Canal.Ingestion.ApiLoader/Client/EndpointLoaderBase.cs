@@ -1,4 +1,5 @@
 using Canal.Ingestion.ApiLoader.Adapters;
+using Canal.Ingestion.ApiLoader.Events;
 using System.Diagnostics.CodeAnalysis;
 using Canal.Ingestion.ApiLoader.Model;
 using Canal.Ingestion.ApiLoader.Storage;
@@ -10,10 +11,11 @@ public abstract class EndpointLoaderBase
 {
 
     [SetsRequiredMembers]
-    public EndpointLoaderBase(IVendorAdapter vendorAdapter, IIngestionStore store, string environmentName, int maxDegreeOfParallelism, int maxRetries, int minRetryDelayMs, ILoggerFactory loggerFactory)
+    public EndpointLoaderBase(IVendorAdapter vendorAdapter, IIngestionStore store, IEventPublisher eventPublisher, string environmentName, int maxDegreeOfParallelism, int maxRetries, int minRetryDelayMs, ILoggerFactory loggerFactory)
     {
         VendorAdapter = vendorAdapter;
         Store = store;
+        EventPublisher = eventPublisher;
         EnvironmentName = environmentName;
         MaxDegreeOfParallelism = maxDegreeOfParallelism;
         MaxRetries = maxRetries;
@@ -23,6 +25,7 @@ public abstract class EndpointLoaderBase
     }
     protected IVendorAdapter VendorAdapter { get; }
     protected IIngestionStore Store { get; init; }
+    protected IEventPublisher EventPublisher { get; init; }
     protected string EnvironmentName { get; init; }
     protected int MaxDegreeOfParallelism { get; init; }
     protected int MaxRetries { get; init; }

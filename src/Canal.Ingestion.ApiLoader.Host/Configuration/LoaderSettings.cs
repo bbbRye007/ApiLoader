@@ -11,4 +11,5 @@ public sealed class LoaderSettings
     public int LookbackDays { get; set; } = 90;
     public string Storage { get; set; } = "adls";
     public string LocalStoragePath { get; set; } = @"C:\Temp\ApiLoaderOutput";
+    public string EventPublisher { get; set; } = "none";
 }

@@ -1,5 +1,6 @@
 using Canal.Ingestion.ApiLoader.Engine;
 using Canal.Ingestion.ApiLoader.Adapters;
+using Canal.Ingestion.ApiLoader.Events;
 using Canal.Ingestion.ApiLoader.Model;
 using Canal.Ingestion.ApiLoader.Storage;
 using System.Diagnostics.CodeAnalysis;
@@ -14,8 +15,8 @@ public class EndpointLoader : EndpointLoaderBase
     private readonly FetchEngine Fetcher;
 
     [SetsRequiredMembers]
-    public EndpointLoader(EndpointDefinition definition, IVendorAdapter vendorAdapter, IIngestionStore store, string environmentName, int maxDegreeOfParallelism, int maxRetries, int minRetryDelayMs, ILoggerFactory loggerFactory)
-        : base(vendorAdapter, store, environmentName, maxDegreeOfParallelism, maxRetries, minRetryDelayMs, loggerFactory)
+    public EndpointLoader(EndpointDefinition definition, IVendorAdapter vendorAdapter, IIngestionStore store, IEventPublisher eventPublisher, string environmentName, int maxDegreeOfParallelism, int maxRetries, int minRetryDelayMs, ILoggerFactory loggerFactory)
+        : base(vendorAdapter, store, eventPublisher, environmentName, maxDegreeOfParallelism, maxRetries, minRetryDelayMs, loggerFactory)
     {
         _definition = definition ?? throw new ArgumentNullException(nameof(definition));
         Fetcher = new FetchEngine(vendorAdapter, maxDegreeOfParallelism, maxRetries, minRetryDelayMs, loggerFactory.CreateLogger<FetchEngine>());
@@ -28,8 +29,28 @@ public class EndpointLoader : EndpointLoaderBase
     {
         InitRun(_definition);
 
+        var subject = $"{VendorName}/{_definition.FriendlyName}";
+        var eventSource = $"/canal/ingestion/apiloader/{EnvironmentName}";
+
         Logger.LogInformation("Load started: {Vendor}/{Endpoint} v{Version} (run {RunId}, saveBehavior={SaveBehavior})",
             VendorName, _definition.FriendlyName, _definition.ResourceVersion, IngestionRun!.IngestionRunId, saveBehavior);
+
+        await EventPublisher.PublishAsync(new IngestionEvent
+        {
+            Type = IngestionEventTypes.RunStarted,
+            Source = eventSource,
+            Subject = subject,
+            Time = IngestionRun.IngestionRunStartUtc,
+            Data = new Dictionary<string, object>
+            {
+                ["run_id"] = IngestionRun.IngestionRunId,
+                ["vendor"] = VendorName,
+                ["endpoint"] = _definition.FriendlyName,
+                ["resource_version"] = _definition.ResourceVersion,
+                ["environment"] = EnvironmentName,
+                ["save_behavior"] = saveBehavior.ToString()
+            }
+        }, cancellationToken).ConfigureAwait(false);
 
         if (_definition.RequiresIterationList && (iterationList is null || iterationList.Count == 0))
             throw new ArgumentException(
@@ -76,17 +97,86 @@ public class EndpointLoader : EndpointLoaderBase
             ? async result => await SaveResultAsync(result, cancellationToken).ConfigureAwait(false)
             : null;
 
-        var results = (requests.Count == 1)
-            ? await Fetcher.ProcessRequest(IngestionRun!, requests[0], onPageFetched, cancellationToken).ConfigureAwait(false)
-            : await Fetcher.ProcessRequests(IngestionRun!, requests, onPageFetched, cancellationToken).ConfigureAwait(false);
+        List<FetchResult> results;
+        try
+        {
+            results = (requests.Count == 1)
+                ? await Fetcher.ProcessRequest(IngestionRun!, requests[0], onPageFetched, cancellationToken).ConfigureAwait(false)
+                : await Fetcher.ProcessRequests(IngestionRun!, requests, onPageFetched, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            await EventPublisher.PublishAsync(new IngestionEvent
+            {
+                Type = IngestionEventTypes.RunFailed,
+                Source = eventSource,
+                Subject = subject,
+                Time = DateTimeOffset.UtcNow,
+                Data = new Dictionary<string, object>
+                {
+                    ["run_id"] = IngestionRun.IngestionRunId,
+                    ["vendor"] = VendorName,
+                    ["endpoint"] = _definition.FriendlyName,
+                    ["resource_version"] = _definition.ResourceVersion,
+                    ["environment"] = EnvironmentName,
+                    ["error"] = ex.Message
+                }
+            }, cancellationToken).ConfigureAwait(false);
+
+            await EventPublisher.FlushAsync(cancellationToken).ConfigureAwait(false);
+            throw;
+        }
 
         if (saveBehavior == SaveBehavior.AfterAll) await SaveResultsAsync(results, cancellationToken).ConfigureAwait(false);
-        if (saveWatermark && _definition.SupportsWatermark) await GenerateWatermarkAndSaveAsync(startUtc!.Value, endUtc!.Value, cancellationToken).ConfigureAwait(false);
+
+        if (saveWatermark && _definition.SupportsWatermark)
+        {
+            await GenerateWatermarkAndSaveAsync(startUtc!.Value, endUtc!.Value, cancellationToken).ConfigureAwait(false);
+
+            await EventPublisher.PublishAsync(new IngestionEvent
+            {
+                Type = IngestionEventTypes.WatermarkAdvanced,
+                Source = eventSource,
+                Subject = subject,
+                Time = DateTimeOffset.UtcNow,
+                Data = new Dictionary<string, object>
+                {
+                    ["run_id"] = IngestionRun.IngestionRunId,
+                    ["vendor"] = VendorName,
+                    ["endpoint"] = _definition.FriendlyName,
+                    ["resource_version"] = _definition.ResourceVersion,
+                    ["previous_watermark"] = startUtc!.Value.ToString("O"),
+                    ["new_watermark"] = endUtc!.Value.ToString("O")
+                }
+            }, cancellationToken).ConfigureAwait(false);
+        }
 
         var succeeded = results.Count(r => r.FetchSucceeded);
         var failed = results.Count - succeeded;
         Logger.LogInformation("Load completed: {Vendor}/{Endpoint} v{Version} - {Succeeded} succeeded, {Failed} failed (run {RunId})",
             VendorName, _definition.FriendlyName, _definition.ResourceVersion, succeeded, failed, IngestionRun!.IngestionRunId);
+
+        await EventPublisher.PublishAsync(new IngestionEvent
+        {
+            Type = IngestionEventTypes.RunCompleted,
+            Source = eventSource,
+            Subject = subject,
+            Time = DateTimeOffset.UtcNow,
+            Data = new Dictionary<string, object>
+            {
+                ["run_id"] = IngestionRun.IngestionRunId,
+                ["vendor"] = VendorName,
+                ["endpoint"] = _definition.FriendlyName,
+                ["resource_version"] = _definition.ResourceVersion,
+                ["environment"] = EnvironmentName,
+                ["pages_succeeded"] = succeeded,
+                ["pages_failed"] = failed,
+                ["total_results"] = results.Count,
+                ["duration_ms"] = (long)(DateTimeOffset.UtcNow - IngestionRun.IngestionRunStartUtc).TotalMilliseconds
+            }
+        }, cancellationToken).ConfigureAwait(false);
+
+        await EventPublisher.FlushAsync(cancellationToken).ConfigureAwait(false);
 
         return results;
     }
