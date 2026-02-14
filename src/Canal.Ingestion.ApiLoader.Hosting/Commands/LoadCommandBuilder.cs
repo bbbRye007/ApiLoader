@@ -132,9 +132,10 @@ internal static class LoadCommandBuilder
                     startUtc, endUtc, saveBehavior, !noSaveWatermark);
             }
 
-            using var ctx = contextFactory(parseResult, cancellationToken);
+            LoadContext? ctx = null;
             try
             {
+                ctx = contextFactory(parseResult, cancellationToken);
                 return await LoadCommandHandler.ExecuteAsync(
                     capturedEntry,
                     capturedAllEndpoints,
@@ -159,6 +160,10 @@ internal static class LoadCommandBuilder
             {
                 Console.Error.WriteLine($"Error: {ex.Message}");
                 return 1;
+            }
+            finally
+            {
+                ctx?.Dispose();
             }
         });
 

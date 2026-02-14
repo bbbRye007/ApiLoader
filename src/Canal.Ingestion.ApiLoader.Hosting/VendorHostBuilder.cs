@@ -198,15 +198,21 @@ public sealed class VendorHostBuilder
 
             // d. Cancellation token — link the System.CommandLine token with
             //    process-exit / Ctrl+C signals so either source triggers cancellation.
+            //    Both processCts and linkedCts are owned and disposed by LoadContext.
             var processCts = new CancellationTokenSource();
             void RequestCancel()
             {
                 try { if (!processCts.IsCancellationRequested) processCts.Cancel(); }
                 catch (ObjectDisposedException) { }
             }
-            System.Runtime.Loader.AssemblyLoadContext.Default.Unloading += _ => RequestCancel();
-            AppDomain.CurrentDomain.ProcessExit += (_, _) => RequestCancel();
-            Console.CancelKeyPress += (_, e) => { e.Cancel = true; RequestCancel(); };
+
+            Action<System.Runtime.Loader.AssemblyLoadContext> unloadingHandler = _ => RequestCancel();
+            EventHandler processExitHandler = (_, _) => RequestCancel();
+            ConsoleCancelEventHandler cancelKeyPressHandler = (_, e) => { e.Cancel = true; RequestCancel(); };
+
+            System.Runtime.Loader.AssemblyLoadContext.Default.Unloading += unloadingHandler;
+            AppDomain.CurrentDomain.ProcessExit += processExitHandler;
+            Console.CancelKeyPress += cancelKeyPressHandler;
 
             var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
                 commandToken, processCts.Token);
@@ -238,15 +244,19 @@ public sealed class VendorHostBuilder
                 adapter, store, loader.Environment,
                 loader.MaxDop, loader.MaxRetries, loader.MinRetryDelayMs, loggerFactory);
 
-            return new LoadContext
+            return new LoadContext(
+                loggerFactory, httpClient, linkedCts, processCts,
+                cleanupEventHandlers: () =>
+                {
+                    System.Runtime.Loader.AssemblyLoadContext.Default.Unloading -= unloadingHandler;
+                    AppDomain.CurrentDomain.ProcessExit -= processExitHandler;
+                    Console.CancelKeyPress -= cancelKeyPressHandler;
+                })
             {
                 Factory = factory,
                 Endpoints = endpoints,
                 Logger = hostLogger,
-                CancellationToken = linkedCts.Token,
-                LoggerFactory = loggerFactory,
-                HttpClient = httpClient,
-                LinkedCts = linkedCts
+                CancellationToken = linkedCts.Token
             };
         }
 
