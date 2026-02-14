@@ -106,8 +106,6 @@ internal static class LoadCommandBuilder
 
         endpointCommand.SetAction(async (parseResult, cancellationToken) =>
         {
-            var ctx = contextFactory(parseResult);
-
             var maxPages = parseResult.GetValue(maxPagesOption);
             var saveBehaviorRaw = parseResult.GetValue(saveBehaviorOption) ?? "PerPage";
             var dryRun = parseResult.GetValue(dryRunOption);
@@ -121,13 +119,22 @@ internal static class LoadCommandBuilder
 
             if (!Enum.TryParse<SaveBehavior>(saveBehaviorRaw, ignoreCase: true, out var saveBehavior))
             {
-                ctx.Logger.LogError(
-                    "Invalid --save-behavior '{Value}'. Must be: PerPage, AfterAll, or None.", saveBehaviorRaw);
+                Console.Error.WriteLine(
+                    $"Invalid --save-behavior '{saveBehaviorRaw}'. Must be: PerPage, AfterAll, or None.");
                 return 1;
+            }
+
+            // Dry-run does not require adapter/storage — skip infrastructure setup
+            if (dryRun)
+            {
+                return LoadCommandHandler.ExecuteDryRun(
+                    capturedEntry, capturedAllEndpoints, pageSize, maxPages,
+                    startUtc, endUtc, saveBehavior, !noSaveWatermark);
             }
 
             try
             {
+                var ctx = contextFactory(parseResult);
                 return await LoadCommandHandler.ExecuteAsync(
                     capturedEntry,
                     capturedAllEndpoints,
@@ -141,16 +148,16 @@ internal static class LoadCommandBuilder
                     saveBehavior,
                     saveWatermark: !noSaveWatermark,
                     bodyParamsJson,
-                    dryRun).ConfigureAwait(false);
+                    dryRun: false).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
-                ctx.Logger.LogWarning("Operation cancelled.");
+                Console.Error.WriteLine("Operation cancelled.");
                 return 130;
             }
             catch (Exception ex)
             {
-                ctx.Logger.LogError(ex, "Unhandled error.");
+                Console.Error.WriteLine($"Error: {ex.Message}");
                 return 1;
             }
         });

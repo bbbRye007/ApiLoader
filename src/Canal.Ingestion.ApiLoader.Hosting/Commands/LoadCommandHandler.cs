@@ -12,6 +12,56 @@ namespace Canal.Ingestion.ApiLoader.Hosting.Commands;
 internal static class LoadCommandHandler
 {
     /// <summary>
+    /// Prints the dry-run execution plan without creating infrastructure.
+    /// Called directly from the command handler when --dry-run is set.
+    /// </summary>
+    public static int ExecuteDryRun(
+        EndpointEntry target,
+        IReadOnlyList<EndpointEntry> allEndpoints,
+        int? pageSize,
+        int? maxPages,
+        DateTimeOffset? startUtc,
+        DateTimeOffset? endUtc,
+        SaveBehavior saveBehavior,
+        bool saveWatermark)
+    {
+        List<EndpointEntry> chain;
+        try
+        {
+            chain = DependencyResolver.Resolve(target, allEndpoints);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Console.Error.WriteLine($"Dependency resolution failed: {ex.Message}");
+            return 1;
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("=== DRY RUN ===");
+        Console.WriteLine($"Endpoint:      {target.Name} (v{target.Definition.ResourceVersion})");
+        Console.WriteLine($"Resource:      {target.Definition.ResourceName}");
+        Console.WriteLine($"Save behavior: {saveBehavior}");
+        Console.WriteLine($"Watermark:     {(saveWatermark ? "save" : "skip")}");
+        if (startUtc.HasValue) Console.WriteLine($"Start:         {startUtc.Value:O}");
+        if (endUtc.HasValue)   Console.WriteLine($"End:           {endUtc.Value:O}");
+        if (pageSize.HasValue) Console.WriteLine($"Page size:     {pageSize.Value}");
+        if (maxPages.HasValue) Console.WriteLine($"Max pages:     {maxPages.Value}");
+        if (chain.Count > 1)
+        {
+            Console.WriteLine();
+            Console.WriteLine("Dependency chain (executed in order):");
+            for (int i = 0; i < chain.Count; i++)
+            {
+                var isTarget = (i == chain.Count - 1);
+                Console.WriteLine($"  {i + 1}. {chain[i].Name} v{chain[i].Definition.ResourceVersion}{(isTarget ? "  <-- target (saved)" : "  (fetched, not saved)")}");
+            }
+        }
+        Console.WriteLine();
+        Console.WriteLine("No data will be fetched.");
+        return 0;
+    }
+
+    /// <summary>
     /// Runs the load operation. Called by the System.CommandLine handler for each
     /// endpoint subcommand.
     /// </summary>
@@ -41,34 +91,6 @@ internal static class LoadCommandHandler
         {
             logger.LogError("Dependency resolution failed: {Message}", ex.Message);
             return 1;
-        }
-
-        // Dry run
-        if (dryRun)
-        {
-            Console.WriteLine();
-            Console.WriteLine("=== DRY RUN ===");
-            Console.WriteLine($"Endpoint:      {target.Name} (v{target.Definition.ResourceVersion})");
-            Console.WriteLine($"Resource:      {target.Definition.ResourceName}");
-            Console.WriteLine($"Save behavior: {saveBehavior}");
-            Console.WriteLine($"Watermark:     {(saveWatermark ? "save" : "skip")}");
-            if (startUtc.HasValue) Console.WriteLine($"Start:         {startUtc.Value:O}");
-            if (endUtc.HasValue)   Console.WriteLine($"End:           {endUtc.Value:O}");
-            if (pageSize.HasValue) Console.WriteLine($"Page size:     {pageSize.Value}");
-            if (maxPages.HasValue) Console.WriteLine($"Max pages:     {maxPages.Value}");
-            if (chain.Count > 1)
-            {
-                Console.WriteLine();
-                Console.WriteLine("Dependency chain (executed in order):");
-                for (int i = 0; i < chain.Count; i++)
-                {
-                    var isTarget = (i == chain.Count - 1);
-                    Console.WriteLine($"  {i + 1}. {chain[i].Name} v{chain[i].Definition.ResourceVersion}{(isTarget ? "  <-- target (saved)" : "  (fetched, not saved)")}");
-                }
-            }
-            Console.WriteLine();
-            Console.WriteLine("No data will be fetched.");
-            return 0;
         }
 
         // Execute chain
