@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Http.Headers;
@@ -241,8 +242,8 @@ public sealed class FmcsaAdapter : VendorAdapterBase, IVendorAdapter
     /// <summary>
     /// O(1) lookup cache: resource name → friendly name, built once from the endpoint catalog.
     /// </summary>
-    private static readonly Dictionary<string, string> FriendlyNamesByResource =
-        FmcsaEndpoints.All.ToDictionary(
+    private static readonly FrozenDictionary<string, string> FriendlyNamesByResource =
+        FmcsaEndpoints.All.ToFrozenDictionary(
             e => e.Definition.ResourceName,
             e => e.Definition.FriendlyName,
             StringComparer.OrdinalIgnoreCase);

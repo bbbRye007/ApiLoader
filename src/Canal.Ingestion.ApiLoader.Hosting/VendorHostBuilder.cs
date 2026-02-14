@@ -110,6 +110,7 @@ public sealed class VendorHostBuilder
 
         // Vendor-specific config sources first (lowest precedence — embedded defaults).
         // Run all callbacks even if one throws; collect and rethrow as AggregateException.
+        // Note: callbacks must be independent — a failed callback leaves partial state on configBuilder.
         List<Exception>? configErrors = null;
         foreach (var cb in _configCallbacks)
         {
@@ -289,6 +290,7 @@ public sealed class VendorHostBuilder
                 }
                 catch
                 {
+                    // Defensive: no adapters are IDisposable today
                     (adapter as IDisposable)?.Dispose();
                     throw;
                 }
