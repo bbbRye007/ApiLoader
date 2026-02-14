@@ -19,6 +19,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Canal.Ingestion.ApiLoader.H
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Canal.Ingestion.ApiLoader.Host.TruckerCloud", "src\Canal.Ingestion.ApiLoader.Host.TruckerCloud\Canal.Ingestion.ApiLoader.Host.TruckerCloud.csproj", "{132767F0-26E5-4C9E-8196-5F39C24B1D10}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Canal.Ingestion.ApiLoader.Host.Fmcsa", "src\Canal.Ingestion.ApiLoader.Host.Fmcsa\Canal.Ingestion.ApiLoader.Host.Fmcsa.csproj", "{E04EB041-8095-41EB-A53D-6B5488D1C081}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -113,6 +115,18 @@ Global
 		{132767F0-26E5-4C9E-8196-5F39C24B1D10}.Release|x64.Build.0 = Release|Any CPU
 		{132767F0-26E5-4C9E-8196-5F39C24B1D10}.Release|x86.ActiveCfg = Release|Any CPU
 		{132767F0-26E5-4C9E-8196-5F39C24B1D10}.Release|x86.Build.0 = Release|Any CPU
+		{E04EB041-8095-41EB-A53D-6B5488D1C081}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E04EB041-8095-41EB-A53D-6B5488D1C081}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E04EB041-8095-41EB-A53D-6B5488D1C081}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{E04EB041-8095-41EB-A53D-6B5488D1C081}.Debug|x64.Build.0 = Debug|Any CPU
+		{E04EB041-8095-41EB-A53D-6B5488D1C081}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{E04EB041-8095-41EB-A53D-6B5488D1C081}.Debug|x86.Build.0 = Debug|Any CPU
+		{E04EB041-8095-41EB-A53D-6B5488D1C081}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E04EB041-8095-41EB-A53D-6B5488D1C081}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E04EB041-8095-41EB-A53D-6B5488D1C081}.Release|x64.ActiveCfg = Release|Any CPU
+		{E04EB041-8095-41EB-A53D-6B5488D1C081}.Release|x64.Build.0 = Release|Any CPU
+		{E04EB041-8095-41EB-A53D-6B5488D1C081}.Release|x86.ActiveCfg = Release|Any CPU
+		{E04EB041-8095-41EB-A53D-6B5488D1C081}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -125,5 +139,6 @@ Global
 		{A1B2C3D4-5555-5555-5555-555555555555} = {A1B2C3D4-0001-0000-0000-000000000000}
 		{3C8CECB9-B7A6-49A5-BA1E-824AB00D917C} = {A1B2C3D4-0001-0000-0000-000000000000}
 		{132767F0-26E5-4C9E-8196-5F39C24B1D10} = {A1B2C3D4-0001-0000-0000-000000000000}
+		{E04EB041-8095-41EB-A53D-6B5488D1C081} = {A1B2C3D4-0001-0000-0000-000000000000}
 	EndGlobalSection
 EndGlobal
