@@ -18,6 +18,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="sharedDefaults.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Canal.Ingestion.ApiLoader\Canal.Ingestion.ApiLoader.csproj" />
     <ProjectReference Include="..\Canal.Storage.Adls\Canal.Storage.Adls.csproj" />
   </ItemGroup>

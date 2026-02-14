@@ -16,8 +16,5 @@
     <ProjectReference Include="..\Canal.Ingestion.ApiLoader.Fmcsa\Canal.Ingestion.ApiLoader.Fmcsa.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <EmbeddedResource Include="hostDefaults.json" />
-  </ItemGroup>
 
 </Project>

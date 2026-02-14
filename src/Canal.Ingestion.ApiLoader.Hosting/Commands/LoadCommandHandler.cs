@@ -124,17 +124,26 @@ internal static class LoadCommandHandler
             else
             {
                 logger.LogInformation("Loading target endpoint: {Endpoint}", step.Name);
-                await factory.Create(step.Definition).Load(
-                    iterationList: iterationList,
-                    overrideStartUtc: startUtc,
-                    overrideEndUtc: endUtc,
-                    pageSize: pageSize,
-                    maxPages: maxPages,
-                    saveBehavior: saveBehavior,
-                    saveWatermark: saveWatermark,
-                    bodyParamsJson: bodyParamsJson,
-                    cancellationToken: cancellationToken
-                ).ConfigureAwait(false);
+                try
+                {
+                    await factory.Create(step.Definition).Load(
+                        iterationList: iterationList,
+                        overrideStartUtc: startUtc,
+                        overrideEndUtc: endUtc,
+                        pageSize: pageSize,
+                        maxPages: maxPages,
+                        saveBehavior: saveBehavior,
+                        saveWatermark: saveWatermark,
+                        bodyParamsJson: bodyParamsJson,
+                        cancellationToken: cancellationToken
+                    ).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Target endpoint {Endpoint} (step {Step}/{Total}) failed", step.Name, i + 1, chain.Count);
+                    return 1;
+                }
             }
         }
 

@@ -108,7 +108,13 @@ public sealed class VendorHostBuilder
         // ── 2. Build IConfiguration ──
         var configBuilder = new ConfigurationBuilder();
 
-        // Vendor-specific config sources first (lowest precedence — embedded defaults).
+        // Shared defaults from the Hosting library (lowest precedence).
+        var sharedDefaultsStream = typeof(VendorHostBuilder).Assembly
+            .GetManifestResourceStream("Canal.Ingestion.ApiLoader.Hosting.sharedDefaults.json");
+        if (sharedDefaultsStream is not null)
+            configBuilder.AddJsonStream(sharedDefaultsStream);
+
+        // Vendor-specific config sources next (override shared defaults).
         // Run all callbacks even if one throws; collect and rethrow as AggregateException.
         // Note: callbacks must be independent — a failed callback leaves partial state on configBuilder.
         List<Exception>? configErrors = null;
@@ -180,6 +186,14 @@ public sealed class VendorHostBuilder
         {
             // a. Snapshot settings so CLI overrides don't mutate the shared instance
             var settings = loader.Snapshot();
+
+            // Validate config-bound values before CLI overrides (CLI values are validated separately below)
+            if (settings.MaxDop < 1)
+                throw new InvalidOperationException(
+                    $"Configuration value 'Loader:MaxDop' must be at least 1, but was {settings.MaxDop}.");
+            if (settings.MaxRetries < 0)
+                throw new InvalidOperationException(
+                    $"Configuration value 'Loader:MaxRetries' must be non-negative, but was {settings.MaxRetries}.");
 
             var envVal = parseResult.GetValue(environmentOption);
             if (envVal is not null) settings.Environment = envVal;
