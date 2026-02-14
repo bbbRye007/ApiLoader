@@ -163,7 +163,7 @@ public sealed class VendorHostBuilder
         var vendorDisplayName = _vendorDisplayName;
 
         // Infrastructure setup shared by load command actions
-        LoadContext BuildLoadContext(ParseResult parseResult)
+        LoadContext BuildLoadContext(ParseResult parseResult, CancellationToken commandToken)
         {
             // a. Apply CLI overrides to LoaderSettings
             var envVal = parseResult.GetValue(environmentOption);
@@ -196,16 +196,20 @@ public sealed class VendorHostBuilder
                 "ApiLoader starting — vendor={Vendor}, environment={Environment}, storage={Storage}, maxDop={MaxDop}",
                 vendorDisplayName, loader.Environment, loader.Storage, loader.MaxDop);
 
-            // d. Cancellation token with graceful shutdown hooks
-            var cts = new CancellationTokenSource();
+            // d. Cancellation token — link the System.CommandLine token with
+            //    process-exit / Ctrl+C signals so either source triggers cancellation.
+            var processCts = new CancellationTokenSource();
             void RequestCancel()
             {
-                try { if (!cts.IsCancellationRequested) cts.Cancel(); }
+                try { if (!processCts.IsCancellationRequested) processCts.Cancel(); }
                 catch (ObjectDisposedException) { }
             }
             System.Runtime.Loader.AssemblyLoadContext.Default.Unloading += _ => RequestCancel();
             AppDomain.CurrentDomain.ProcessExit += (_, _) => RequestCancel();
             Console.CancelKeyPress += (_, e) => { e.Cancel = true; RequestCancel(); };
+
+            var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                commandToken, processCts.Token);
 
             // e. Build IIngestionStore
             IIngestionStore store;
@@ -239,7 +243,10 @@ public sealed class VendorHostBuilder
                 Factory = factory,
                 Endpoints = endpoints,
                 Logger = hostLogger,
-                CancellationToken = cts.Token
+                CancellationToken = linkedCts.Token,
+                LoggerFactory = loggerFactory,
+                HttpClient = httpClient,
+                LinkedCts = linkedCts
             };
         }
 

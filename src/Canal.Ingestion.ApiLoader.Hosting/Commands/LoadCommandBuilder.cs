@@ -21,7 +21,7 @@ internal static class LoadCommandBuilder
     public static Command Build(
         IReadOnlyList<EndpointEntry> endpoints,
         LoaderSettings loaderSettings,
-        Func<ParseResult, LoadContext> contextFactory)
+        Func<ParseResult, CancellationToken, LoadContext> contextFactory)
     {
         var loadCommand = new Command("load", "Load a single endpoint (dependencies auto-resolved)");
 
@@ -38,7 +38,7 @@ internal static class LoadCommandBuilder
         EndpointEntry entry,
         IReadOnlyList<EndpointEntry> allEndpoints,
         LoaderSettings loaderSettings,
-        Func<ParseResult, LoadContext> contextFactory)
+        Func<ParseResult, CancellationToken, LoadContext> contextFactory)
     {
         var def = entry.Definition;
         var endpointCommand = new Command(entry.Name, BuildDescription(entry));
@@ -132,9 +132,9 @@ internal static class LoadCommandBuilder
                     startUtc, endUtc, saveBehavior, !noSaveWatermark);
             }
 
+            using var ctx = contextFactory(parseResult, cancellationToken);
             try
             {
-                var ctx = contextFactory(parseResult);
                 return await LoadCommandHandler.ExecuteAsync(
                     capturedEntry,
                     capturedAllEndpoints,
