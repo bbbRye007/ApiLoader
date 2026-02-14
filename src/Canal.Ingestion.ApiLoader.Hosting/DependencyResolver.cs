@@ -1,0 +1,52 @@
+using Canal.Ingestion.ApiLoader.Model;
+
+namespace Canal.Ingestion.ApiLoader.Hosting;
+
+/// <summary>
+/// Resolves endpoint dependency chains within a single vendor's endpoint list.
+/// Migrated from the deleted <c>EndpointRegistry.ResolveDependencyChain</c>.
+/// </summary>
+internal static class DependencyResolver
+{
+    /// <summary>
+    /// Returns the dependency chain for <paramref name="target"/> in execution order
+    /// (dependencies first, target last). Uses <see cref="EndpointDefinition.DependsOn"/>
+    /// to walk the chain.
+    /// </summary>
+    /// <param name="target">The endpoint the user wants to load.</param>
+    /// <param name="allEndpoints">The vendor's full endpoint catalog.</param>
+    /// <returns>Ordered list: [deepest dependency, ..., target].</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown on circular dependency or if a referenced <c>DependsOn</c> name is not found
+    /// in <paramref name="allEndpoints"/>.
+    /// </exception>
+    public static List<EndpointEntry> Resolve(
+        EndpointEntry target,
+        IReadOnlyList<EndpointEntry> allEndpoints)
+    {
+        var chain = new List<EndpointEntry>();
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var current = target;
+
+        while (current is not null)
+        {
+            if (!visited.Add(current.Name))
+                throw new InvalidOperationException(
+                    $"Circular dependency detected at '{current.Name}'.");
+
+            chain.Add(current);
+
+            var dependsOn = current.Definition.DependsOn;
+            if (dependsOn is null)
+                break;
+
+            current = allEndpoints.FirstOrDefault(
+                e => e.Name.Equals(dependsOn, StringComparison.OrdinalIgnoreCase))
+                ?? throw new InvalidOperationException(
+                    $"Dependency '{dependsOn}' not found for endpoint '{current.Name}'.");
+        }
+
+        chain.Reverse();
+        return chain;
+    }
+}
