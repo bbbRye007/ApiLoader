@@ -4,6 +4,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Reflection;
 
+const string EmbeddedDefaultsResource = "Canal.Ingestion.ApiLoader.Host.Fmcsa.hostDefaults.json";
+
 return await new VendorHostBuilder()
     .WithVendorName("FMCSA")
     .WithAdapterFactory((httpClient, loggerFactory) =>
@@ -14,9 +16,9 @@ return await new VendorHostBuilder()
     .ConfigureAppConfiguration(builder =>
     {
         var stream = Assembly.GetExecutingAssembly()
-            .GetManifestResourceStream("Canal.Ingestion.ApiLoader.Host.Fmcsa.hostDefaults.json")
+            .GetManifestResourceStream(EmbeddedDefaultsResource)
             ?? throw new InvalidOperationException(
-                "Embedded resource 'Canal.Ingestion.ApiLoader.Host.Fmcsa.hostDefaults.json' not found. Check the .csproj EmbeddedResource entry.");
+                $"Embedded resource '{EmbeddedDefaultsResource}' not found. Check the .csproj EmbeddedResource entry.");
         builder.AddJsonStream(stream);
     })
     .RunAsync(args);

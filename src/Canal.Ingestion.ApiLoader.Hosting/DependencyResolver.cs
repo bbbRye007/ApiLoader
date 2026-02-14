@@ -42,6 +42,12 @@ internal static class DependencyResolver
             chain.Add(current);
 
             var dependsOn = current.Definition.DependsOn;
+
+            // Guard: an endpoint that requires an iteration list must declare a dependency to provide it
+            if (current.Definition.RequiresIterationList && dependsOn is null)
+                throw new InvalidOperationException(
+                    $"Endpoint '{current.Name}' requires an iteration list (RequiresIterationList=true) but declares no DependsOn.");
+
             if (dependsOn is null)
                 break;
 

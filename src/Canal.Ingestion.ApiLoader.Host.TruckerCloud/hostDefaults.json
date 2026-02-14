@@ -17,6 +17,10 @@
     "ClientId": "",
     "ClientSecret": ""
   },
+  "TruckerCloud": {
+    "ApiUser": "",
+    "ApiPassword": ""
+  },
   "Logging": {
     "LogLevel": {
       "Default": "Information",

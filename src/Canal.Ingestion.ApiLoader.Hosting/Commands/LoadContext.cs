@@ -17,6 +17,12 @@ internal sealed class LoadContext : IDisposable
     private readonly CancellationTokenSource _linkedCts;
     private readonly CancellationTokenSource _processCts;
     private readonly Action _cleanupEventHandlers;
+    /// <summary>
+    /// Defensive: neither IVendorAdapter nor IIngestionStore is IDisposable today,
+    /// but stored for disposal in case future implementations hold resources.
+    /// </summary>
+    private readonly object? _vendorAdapter;
+    private readonly object? _ingestionStore;
     private bool _disposed;
 
     public LoadContext(
@@ -24,13 +30,17 @@ internal sealed class LoadContext : IDisposable
         HttpClient httpClient,
         CancellationTokenSource linkedCts,
         CancellationTokenSource processCts,
-        Action cleanupEventHandlers)
+        Action cleanupEventHandlers,
+        object? vendorAdapter = null,
+        object? ingestionStore = null)
     {
         _loggerFactory = loggerFactory;
         _httpClient = httpClient;
         _linkedCts = linkedCts;
         _processCts = processCts;
         _cleanupEventHandlers = cleanupEventHandlers;
+        _vendorAdapter = vendorAdapter;
+        _ingestionStore = ingestionStore;
     }
 
     public required EndpointLoaderFactory Factory { get; init; }
@@ -49,14 +59,22 @@ internal sealed class LoadContext : IDisposable
         }
         finally
         {
-            try { _linkedCts.Dispose(); }
+            try { (_vendorAdapter as IDisposable)?.Dispose(); }
             finally
             {
-                try { _processCts.Dispose(); }
+                try { (_ingestionStore as IDisposable)?.Dispose(); }
                 finally
                 {
-                    try { _httpClient.Dispose(); }
-                    finally { _loggerFactory.Dispose(); }
+                    try { _linkedCts.Dispose(); }
+                    finally
+                    {
+                        try { _processCts.Dispose(); }
+                        finally
+                        {
+                            try { _httpClient.Dispose(); }
+                            finally { _loggerFactory.Dispose(); }
+                        }
+                    }
                 }
             }
         }

@@ -1,6 +1,7 @@
 using System.CommandLine;
 using System.CommandLine.Parsing;
 using Canal.Ingestion.ApiLoader.Model;
+using Canal.Ingestion.ApiLoader.Hosting.Configuration;
 using Canal.Ingestion.ApiLoader.Hosting.Helpers;
 
 namespace Canal.Ingestion.ApiLoader.Hosting.Commands;
@@ -18,13 +19,14 @@ internal static class LoadCommandBuilder
     /// </summary>
     public static Command Build(
         IReadOnlyList<EndpointEntry> endpoints,
-        Func<ParseResult, CancellationToken, LoadContext> contextFactory)
+        Func<ParseResult, CancellationToken, LoadContext> contextFactory,
+        LoaderSettings settings)
     {
         var loadCommand = new Command("load", "Load a single endpoint (dependencies auto-resolved)");
 
         foreach (var entry in endpoints)
         {
-            var endpointCommand = BuildEndpointCommand(entry, endpoints, contextFactory);
+            var endpointCommand = BuildEndpointCommand(entry, endpoints, contextFactory, settings);
             loadCommand.Subcommands.Add(endpointCommand);
         }
 
@@ -34,7 +36,8 @@ internal static class LoadCommandBuilder
     private static Command BuildEndpointCommand(
         EndpointEntry entry,
         IReadOnlyList<EndpointEntry> allEndpoints,
-        Func<ParseResult, CancellationToken, LoadContext> contextFactory)
+        Func<ParseResult, CancellationToken, LoadContext> contextFactory,
+        LoaderSettings settings)
     {
         var def = entry.Definition;
         var endpointCommand = new Command(entry.Name, BuildDescription(entry));
@@ -44,7 +47,7 @@ internal static class LoadCommandBuilder
         { Description = "Stop after N pages per request" };
 
         var saveBehaviorOption = new Option<string>("--save-behavior")
-        { Description = "PerPage | AfterAll | None", DefaultValueFactory = _ => "PerPage" };
+        { Description = "PerPage | AfterAll | None", DefaultValueFactory = _ => settings.SaveBehavior };
 
         var dryRunOption = new Option<bool>("--dry-run")
         { Description = "Show execution plan without fetching" };
@@ -80,7 +83,7 @@ internal static class LoadCommandBuilder
             };
 
             noSaveWatermarkOption = new Option<bool>("--no-save-watermark")
-            { Description = "Skip saving watermark after load" };
+            { Description = "Skip saving watermark after load", DefaultValueFactory = _ => !settings.SaveWatermark };
 
             endpointCommand.Options.Add(startUtcOption);
             endpointCommand.Options.Add(endUtcOption);
@@ -88,7 +91,7 @@ internal static class LoadCommandBuilder
         }
 
         Option<string>? bodyParamsJsonOption = null;
-        if (def.HttpMethod == HttpMethod.Post)
+        if (def.HttpMethod.Equals(HttpMethod.Post))
         {
             bodyParamsJsonOption = new Option<string>("--body-params-json")
             { Description = "JSON body for POST request [default: {}]", DefaultValueFactory = _ => "{}" };

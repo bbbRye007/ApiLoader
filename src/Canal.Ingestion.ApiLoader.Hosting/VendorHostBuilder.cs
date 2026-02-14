@@ -112,13 +112,13 @@ public sealed class VendorHostBuilder
         // Run all callbacks even if one throws; collect and rethrow as AggregateException.
         // Note: callbacks must be independent — a failed callback leaves partial state on configBuilder.
         List<Exception>? configErrors = null;
-        foreach (var cb in _configCallbacks)
+        for (int i = 0; i < _configCallbacks.Count; i++)
         {
-            try { cb(configBuilder); }
+            try { _configCallbacks[i](configBuilder); }
             catch (Exception ex)
             {
                 configErrors ??= [];
-                configErrors.Add(ex);
+                configErrors.Add(new InvalidOperationException($"Configuration callback [{i}] failed.", ex));
             }
         }
         if (configErrors is not null)
@@ -191,10 +191,20 @@ public sealed class VendorHostBuilder
             if (localPathVal is not null) settings.LocalStoragePath = localPathVal;
 
             var maxDopVal = parseResult.GetValue(maxDopOption);
-            if (maxDopVal.HasValue) settings.MaxDop = maxDopVal.Value;
+            if (maxDopVal.HasValue)
+            {
+                if (maxDopVal.Value < 1)
+                    throw new ArgumentOutOfRangeException("--max-dop", maxDopVal.Value, "Must be at least 1.");
+                settings.MaxDop = maxDopVal.Value;
+            }
 
             var maxRetriesVal = parseResult.GetValue(maxRetriesOption);
-            if (maxRetriesVal.HasValue) settings.MaxRetries = maxRetriesVal.Value;
+            if (maxRetriesVal.HasValue)
+            {
+                if (maxRetriesVal.Value < 0)
+                    throw new ArgumentOutOfRangeException("--max-retries", maxRetriesVal.Value, "Must be non-negative.");
+                settings.MaxRetries = maxRetriesVal.Value;
+            }
 
             // b. Sanitize environment name
             settings.Environment = EnvironmentNameSanitizer.Sanitize(settings.Environment);
@@ -257,6 +267,7 @@ public sealed class VendorHostBuilder
                 }
                 else
                 {
+                    azSettings.Validate();
                     var credential = new ClientSecretCredential(
                         azSettings.TenantId, azSettings.ClientId, azSettings.ClientSecret);
                     var containerClient = ADLSAccess.Create(
@@ -264,7 +275,7 @@ public sealed class VendorHostBuilder
                     store = new AdlsIngestionStore(containerClient);
                 }
 
-                // f. Create HttpClient
+                // f. Create HttpClient (5-minute timeout matches upstream vendor SLAs; not configurable today)
                 httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
 
                 // g. Invoke adapter factory
@@ -280,7 +291,8 @@ public sealed class VendorHostBuilder
 
                     return new LoadContext(
                         loggerFactory, httpClient, linkedCts, processCts,
-                        cleanupEventHandlers: cleanupHandlers)
+                        cleanupEventHandlers: cleanupHandlers,
+                        vendorAdapter: adapter, ingestionStore: store)
                     {
                         Factory = factory,
                         Endpoints = endpoints,
@@ -308,7 +320,7 @@ public sealed class VendorHostBuilder
         }
 
         // Add 'load' command
-        var loadCommand = LoadCommandBuilder.Build(endpoints, BuildLoadContext);
+        var loadCommand = LoadCommandBuilder.Build(endpoints, BuildLoadContext, loader);
         rootCommand.Subcommands.Add(loadCommand);
 
         // Add 'list' command

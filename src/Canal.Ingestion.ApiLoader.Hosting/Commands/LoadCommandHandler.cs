@@ -102,12 +102,21 @@ internal static class LoadCommandHandler
             if (!isTarget)
             {
                 logger.LogInformation("Auto-fetching dependency: {Endpoint} (unsaved, for iteration list)", step.Name);
-                iterationList = await factory.Create(step.Definition).Load(
-                    iterationList: iterationList,
-                    cancellationToken: cancellationToken,
-                    saveBehavior: SaveBehavior.None,
-                    saveWatermark: false
-                ).ConfigureAwait(false);
+                try
+                {
+                    iterationList = await factory.Create(step.Definition).Load(
+                        iterationList: iterationList,
+                        cancellationToken: cancellationToken,
+                        saveBehavior: SaveBehavior.None,
+                        saveWatermark: false
+                    ).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Dependency {Endpoint} (step {Step}/{Total}) failed", step.Name, i + 1, chain.Count);
+                    return 1;
+                }
 
                 if (iterationList is null || iterationList.Count == 0)
                     logger.LogWarning("Dependency {Endpoint} returned zero results — target may produce empty output", step.Name);
