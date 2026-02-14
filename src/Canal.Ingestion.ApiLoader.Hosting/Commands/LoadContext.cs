@@ -39,12 +39,22 @@ internal sealed class LoadContext : IDisposable
 
     public void Dispose()
     {
-        _cleanupEventHandlers();
-        try { _linkedCts.Dispose(); }
-        finally {
-        try { _processCts.Dispose(); }
-        finally {
-        try { _httpClient.Dispose(); }
-        finally { _loggerFactory.Dispose(); }}}
+        try
+        {
+            _cleanupEventHandlers();
+        }
+        finally
+        {
+            try { _linkedCts.Dispose(); }
+            finally
+            {
+                try { _processCts.Dispose(); }
+                finally
+                {
+                    try { _httpClient.Dispose(); }
+                    finally { _loggerFactory.Dispose(); }
+                }
+            }
+        }
     }
 }

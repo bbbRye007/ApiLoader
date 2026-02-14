@@ -2,4 +2,4 @@ bin/
 obj/
 .claude/
 appsettings.json
-*.sln
+comments.md

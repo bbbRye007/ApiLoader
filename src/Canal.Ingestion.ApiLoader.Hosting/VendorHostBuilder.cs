@@ -24,10 +24,9 @@ public sealed class VendorHostBuilder
 {
     // ── Builder state ──
     private string _vendorDisplayName = string.Empty;
-    private string _executableName = string.Empty;
     private Func<HttpClient, ILoggerFactory, IVendorAdapter>? _adapterFactory;
     private IReadOnlyList<EndpointEntry>? _endpoints;
-    private Action<IConfigurationBuilder>? _configCallback;
+    private readonly List<Action<IConfigurationBuilder>> _configCallbacks = [];
     private readonly List<(string SectionName, object Target)> _vendorSettingsBindings = [];
 
     /// <summary>Sets the vendor display name used in help text and logging.</summary>
@@ -35,14 +34,6 @@ public sealed class VendorHostBuilder
     {
         ArgumentNullException.ThrowIfNull(displayName);
         _vendorDisplayName = displayName;
-        return this;
-    }
-
-    /// <summary>Sets the executable name shown in CLI help text (e.g., "apiloader-truckercloud").</summary>
-    public VendorHostBuilder WithExecutableName(string name)
-    {
-        ArgumentNullException.ThrowIfNull(name);
-        _executableName = name;
         return this;
     }
 
@@ -70,12 +61,13 @@ public sealed class VendorHostBuilder
     /// <summary>
     /// Optional: adds vendor-specific configuration sources (e.g., an embedded hostDefaults.json).
     /// Called during configuration building before external appsettings.json and env vars.
+    /// Multiple calls accumulate — each callback is invoked in registration order.
     /// </summary>
     public VendorHostBuilder ConfigureAppConfiguration(
         Action<IConfigurationBuilder> callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
-        _configCallback = callback;
+        _configCallbacks.Add(callback);
         return this;
     }
 
@@ -105,11 +97,19 @@ public sealed class VendorHostBuilder
         if (_endpoints is null || _endpoints.Count == 0)
             throw new InvalidOperationException("WithEndpoints() must be called with at least one endpoint before RunAsync().");
 
+        // Validate no duplicate endpoint names
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var ep in _endpoints)
+        {
+            if (!seen.Add(ep.Name))
+                throw new InvalidOperationException($"Duplicate endpoint name '{ep.Name}' in endpoint catalog.");
+        }
+
         // ── 2. Build IConfiguration ──
         var configBuilder = new ConfigurationBuilder();
 
         // Vendor-specific config sources first (lowest precedence — embedded defaults)
-        _configCallback?.Invoke(configBuilder);
+        foreach (var cb in _configCallbacks) cb(configBuilder);
 
         // External appsettings.json (optional)
         configBuilder.AddJsonFile("appsettings.json", optional: true);
@@ -165,103 +165,127 @@ public sealed class VendorHostBuilder
         // Infrastructure setup shared by load command actions
         LoadContext BuildLoadContext(ParseResult parseResult, CancellationToken commandToken)
         {
-            // a. Apply CLI overrides to LoaderSettings
+            // a. Snapshot settings so CLI overrides don't mutate the shared instance
+            var settings = loader.Snapshot();
+
             var envVal = parseResult.GetValue(environmentOption);
-            if (envVal is not null) loader.Environment = envVal;
+            if (envVal is not null) settings.Environment = envVal;
 
             var storageVal = parseResult.GetValue(storageOption);
-            if (storageVal is not null) loader.Storage = storageVal;
+            if (storageVal is not null) settings.Storage = storageVal;
 
             var localPathVal = parseResult.GetValue(localStoragePathOption);
-            if (localPathVal is not null) loader.LocalStoragePath = localPathVal;
+            if (localPathVal is not null) settings.LocalStoragePath = localPathVal;
 
             var maxDopVal = parseResult.GetValue(maxDopOption);
-            if (maxDopVal.HasValue) loader.MaxDop = maxDopVal.Value;
+            if (maxDopVal.HasValue) settings.MaxDop = maxDopVal.Value;
 
             var maxRetriesVal = parseResult.GetValue(maxRetriesOption);
-            if (maxRetriesVal.HasValue) loader.MaxRetries = maxRetriesVal.Value;
+            if (maxRetriesVal.HasValue) settings.MaxRetries = maxRetriesVal.Value;
 
             // b. Sanitize environment name
-            loader.Environment = EnvironmentNameSanitizer.Sanitize(loader.Environment);
+            settings.Environment = EnvironmentNameSanitizer.Sanitize(settings.Environment);
 
-            // c. Create ILoggerFactory
-            var loggerFactory = LoggerFactory.Create(builder =>
+            // c-h. Create resources with cleanup on partial failure
+            ILoggerFactory? loggerFactory = null;
+            CancellationTokenSource? processCts = null;
+            CancellationTokenSource? linkedCts = null;
+            HttpClient? httpClient = null;
+            Action? cleanupHandlers = null;
+
+            try
             {
-                builder.AddConfiguration(config.GetSection("Logging"));
-                builder.AddConsole();
-            });
-            var hostLogger = loggerFactory.CreateLogger("ApiLoader");
+                // c. Create ILoggerFactory
+                loggerFactory = LoggerFactory.Create(builder =>
+                {
+                    builder.AddConfiguration(config.GetSection("Logging"));
+                    builder.AddConsole();
+                });
+                var hostLogger = loggerFactory.CreateLogger("ApiLoader");
 
-            hostLogger.LogInformation(
-                "ApiLoader starting — vendor={Vendor}, environment={Environment}, storage={Storage}, maxDop={MaxDop}",
-                vendorDisplayName, loader.Environment, loader.Storage, loader.MaxDop);
+                hostLogger.LogInformation(
+                    "ApiLoader starting — vendor={Vendor}, environment={Environment}, storage={Storage}, maxDop={MaxDop}",
+                    vendorDisplayName, settings.Environment, settings.Storage, settings.MaxDop);
 
-            // d. Cancellation token — link the System.CommandLine token with
-            //    process-exit / Ctrl+C signals so either source triggers cancellation.
-            //    Both processCts and linkedCts are owned and disposed by LoadContext.
-            var processCts = new CancellationTokenSource();
-            void RequestCancel()
-            {
-                try { if (!processCts.IsCancellationRequested) processCts.Cancel(); }
-                catch (ObjectDisposedException) { }
-            }
+                // d. Cancellation token — link the System.CommandLine token with
+                //    process-exit / Ctrl+C signals so either source triggers cancellation.
+                //    Both processCts and linkedCts are owned and disposed by LoadContext.
+                processCts = new CancellationTokenSource();
+                void RequestCancel()
+                {
+                    try { if (!processCts.IsCancellationRequested) processCts.Cancel(); }
+                    catch (ObjectDisposedException) { }
+                }
 
-            Action<System.Runtime.Loader.AssemblyLoadContext> unloadingHandler = _ => RequestCancel();
-            EventHandler processExitHandler = (_, _) => RequestCancel();
-            ConsoleCancelEventHandler cancelKeyPressHandler = (_, e) => { e.Cancel = true; RequestCancel(); };
+                Action<System.Runtime.Loader.AssemblyLoadContext> unloadingHandler = _ => RequestCancel();
+                EventHandler processExitHandler = (_, _) => RequestCancel();
+                ConsoleCancelEventHandler cancelKeyPressHandler = (_, e) => { e.Cancel = true; RequestCancel(); };
 
-            System.Runtime.Loader.AssemblyLoadContext.Default.Unloading += unloadingHandler;
-            AppDomain.CurrentDomain.ProcessExit += processExitHandler;
-            Console.CancelKeyPress += cancelKeyPressHandler;
+                System.Runtime.Loader.AssemblyLoadContext.Default.Unloading += unloadingHandler;
+                AppDomain.CurrentDomain.ProcessExit += processExitHandler;
+                Console.CancelKeyPress += cancelKeyPressHandler;
 
-            var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-                commandToken, processCts.Token);
-
-            // e. Build IIngestionStore
-            IIngestionStore store;
-            if (loader.Storage.Equals("file", StringComparison.OrdinalIgnoreCase))
-            {
-                hostLogger.LogInformation("Using local file storage at {Path}", loader.LocalStoragePath);
-                store = new LocalFileIngestionStore(loader.LocalStoragePath);
-            }
-            else
-            {
-                var credential = new ClientSecretCredential(
-                    azSettings.TenantId, azSettings.ClientId, azSettings.ClientSecret);
-                var containerClient = ADLSAccess.Create(
-                    azSettings.AccountName, azSettings.ContainerName, credential).ContainerClient;
-                store = new AdlsIngestionStore(containerClient);
-            }
-
-            // f. Create HttpClient
-            var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
-
-            // g. Invoke adapter factory
-            var adapter = adapterFactory(httpClient, loggerFactory);
-
-            // h. Create EndpointLoaderFactory
-            var factory = new EndpointLoaderFactory(
-                adapter, store, loader.Environment,
-                loader.MaxDop, loader.MaxRetries, loader.MinRetryDelayMs, loggerFactory);
-
-            return new LoadContext(
-                loggerFactory, httpClient, linkedCts, processCts,
-                cleanupEventHandlers: () =>
+                cleanupHandlers = () =>
                 {
                     System.Runtime.Loader.AssemblyLoadContext.Default.Unloading -= unloadingHandler;
                     AppDomain.CurrentDomain.ProcessExit -= processExitHandler;
                     Console.CancelKeyPress -= cancelKeyPressHandler;
-                })
+                };
+
+                linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                    commandToken, processCts.Token);
+
+                // e. Build IIngestionStore
+                IIngestionStore store;
+                if (settings.Storage.Equals("file", StringComparison.OrdinalIgnoreCase))
+                {
+                    hostLogger.LogInformation("Using local file storage at {Path}", settings.LocalStoragePath);
+                    store = new LocalFileIngestionStore(settings.LocalStoragePath);
+                }
+                else
+                {
+                    var credential = new ClientSecretCredential(
+                        azSettings.TenantId, azSettings.ClientId, azSettings.ClientSecret);
+                    var containerClient = ADLSAccess.Create(
+                        azSettings.AccountName, azSettings.ContainerName, credential).ContainerClient;
+                    store = new AdlsIngestionStore(containerClient);
+                }
+
+                // f. Create HttpClient
+                httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+
+                // g. Invoke adapter factory
+                var adapter = adapterFactory(httpClient, loggerFactory);
+
+                // h. Create EndpointLoaderFactory
+                var factory = new EndpointLoaderFactory(
+                    adapter, store, settings.Environment,
+                    settings.MaxDop, settings.MaxRetries, settings.MinRetryDelayMs, loggerFactory);
+
+                return new LoadContext(
+                    loggerFactory, httpClient, linkedCts, processCts,
+                    cleanupEventHandlers: cleanupHandlers)
+                {
+                    Factory = factory,
+                    Endpoints = endpoints,
+                    Logger = hostLogger,
+                    CancellationToken = linkedCts.Token
+                };
+            }
+            catch
             {
-                Factory = factory,
-                Endpoints = endpoints,
-                Logger = hostLogger,
-                CancellationToken = linkedCts.Token
-            };
+                // Clean up partially-created resources in reverse order
+                cleanupHandlers?.Invoke();
+                linkedCts?.Dispose();
+                processCts?.Dispose();
+                httpClient?.Dispose();
+                loggerFactory?.Dispose();
+                throw;
+            }
         }
 
         // Add 'load' command
-        var loadCommand = LoadCommandBuilder.Build(endpoints, loader, BuildLoadContext);
+        var loadCommand = LoadCommandBuilder.Build(endpoints, BuildLoadContext);
         rootCommand.Subcommands.Add(loadCommand);
 
         // Add 'list' command

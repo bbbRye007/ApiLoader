@@ -6,6 +6,11 @@ namespace Canal.Ingestion.ApiLoader.Hosting;
 /// Resolves endpoint dependency chains within a single vendor's endpoint list.
 /// Migrated from the deleted <c>EndpointRegistry.ResolveDependencyChain</c>.
 /// </summary>
+/// <remarks>
+/// Only linear single-parent chains are supported (A → B → C). Each endpoint may
+/// have at most one <see cref="EndpointDefinition.DependsOn"/> value. Diamond or
+/// multi-parent graphs are not supported.
+/// </remarks>
 internal static class DependencyResolver
 {
     /// <summary>

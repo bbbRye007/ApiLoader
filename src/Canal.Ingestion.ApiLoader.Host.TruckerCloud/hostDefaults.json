@@ -10,10 +10,6 @@
     "Storage": "adls",
     "LocalStoragePath": "C:\\Temp\\ApiLoaderOutput"
   },
-  "TruckerCloud": {
-    "ApiUser": "",
-    "ApiPassword": ""
-  },
   "Azure": {
     "AccountName": "",
     "ContainerName": "",

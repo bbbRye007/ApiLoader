@@ -78,8 +78,7 @@ internal static class LoadCommandHandler
         DateTimeOffset? endUtc,
         SaveBehavior saveBehavior,
         bool saveWatermark,
-        string bodyParamsJson,
-        bool dryRun)
+        string bodyParamsJson)
     {
         // Resolve dependency chain
         List<EndpointEntry> chain;
@@ -93,7 +92,7 @@ internal static class LoadCommandHandler
             return 1;
         }
 
-        // Execute chain
+        // Execute chain — pass iterationList from each step into the next
         List<FetchResult>? iterationList = null;
         for (int i = 0; i < chain.Count; i++)
         {
@@ -104,10 +103,14 @@ internal static class LoadCommandHandler
             {
                 logger.LogInformation("Auto-fetching dependency: {Endpoint} (unsaved, for iteration list)", step.Name);
                 iterationList = await factory.Create(step.Definition).Load(
+                    iterationList: iterationList,
                     cancellationToken: cancellationToken,
                     saveBehavior: SaveBehavior.None,
                     saveWatermark: false
                 ).ConfigureAwait(false);
+
+                if (iterationList is null || iterationList.Count == 0)
+                    logger.LogWarning("Dependency {Endpoint} returned zero results — target may produce empty output", step.Name);
             }
             else
             {

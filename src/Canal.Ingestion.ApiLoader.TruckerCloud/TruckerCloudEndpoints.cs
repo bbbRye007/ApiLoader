@@ -56,7 +56,7 @@ public static class TruckerCloudEndpoints
         RequiresIterationList = true,
         BuildRequests = RequestBuilders.CarrierDependent(ExtractCarrierCodes),
         Description = "Drivers per carrier.",
-        DependsOn = "CarriersV4"
+        DependsOn = nameof(CarriersV4)
     };
 
     /// <summary>
@@ -70,7 +70,7 @@ public static class TruckerCloudEndpoints
         RequiresIterationList = true,
         BuildRequests = RequestBuilders.CarrierDependent(ExtractCarrierCodes),
         Description = "Risk scores per carrier.",
-        DependsOn = "CarriersV4"
+        DependsOn = nameof(CarriersV4)
     };
 
     /// <summary>
@@ -85,7 +85,7 @@ public static class TruckerCloudEndpoints
         RequiresIterationList = true,
         BuildRequests = RequestBuilders.CarrierDependent(ExtractVehicleData),
         Description = "Vehicle ignition data. WARNING: very large payloads.",
-        DependsOn = "VehiclesV4"
+        DependsOn = nameof(VehiclesV4)
     };
 
     // ── Carrier + time-window endpoints (require iterationList from CarriersV4, support watermark) ──
@@ -104,7 +104,7 @@ public static class TruckerCloudEndpoints
         MinTimeSpan = TimeSpan.FromHours(12),
         BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld_ShortNames, startParamName: "startTime", endParamName: "endTime", timeFormat: "yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
         Description = "Safety events per carrier+ELD within a time window.",
-        DependsOn = "CarriersV4"
+        DependsOn = nameof(CarriersV4)
     };
 
     /// <summary>
@@ -121,7 +121,7 @@ public static class TruckerCloudEndpoints
         MinTimeSpan = TimeSpan.FromHours(12),
         BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld_ShortNames, startParamName: "startTime", endParamName: "endTime"),
         Description = "Radius of operation within a time window.",
-        DependsOn = "CarriersV4"
+        DependsOn = nameof(CarriersV4)
     };
 
     /// <summary>
@@ -138,7 +138,7 @@ public static class TruckerCloudEndpoints
         MinTimeSpan = TimeSpan.FromHours(12),
         BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld_StandardNames, startParamName: "startDateTime", endParamName: "endDateTime"),
         Description = "GPS miles within a time window.",
-        DependsOn = "CarriersV4"
+        DependsOn = nameof(CarriersV4)
     };
 
     /// <summary>
@@ -155,7 +155,7 @@ public static class TruckerCloudEndpoints
         MinTimeSpan = TimeSpan.FromHours(12),
         BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld_StandardNames, startParamName: "startDateTime", endParamName: "endDateTime"),
         Description = "Zip code miles within a time window.",
-        DependsOn = "CarriersV4"
+        DependsOn = nameof(CarriersV4)
     };
 
     /// <summary>
@@ -173,7 +173,7 @@ public static class TruckerCloudEndpoints
         MaxTimeSpan = TimeSpan.FromDays(1) - TimeSpan.FromSeconds(1),
         BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld_StandardNames, startParamName: "startDateTime", endParamName: "endDateTime"),
         Description = "Trip data within a time window (max ~24h).",
-        DependsOn = "CarriersV4"
+        DependsOn = nameof(CarriersV4)
     };
 
     // ── Endpoint catalog ──────────────────────────────────────────────

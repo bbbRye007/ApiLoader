@@ -182,27 +182,27 @@ public static class FmcsaEndpoints
 
     // ── Endpoint catalog ──────────────────────────────────────────────
 
-    /// <summary>All FMCSA endpoints as CLI-ready entries.</summary>
+    /// <summary>All FMCSA endpoints as CLI-ready entries (alphabetical).</summary>
     public static IReadOnlyList<EndpointEntry> All { get; } =
     [
-        new("InspectionsPerUnit",              InspectionsPerUnit),
-        new("InsHistAllWithHistory",           InsHistAllWithHistory),
         new("ActPendInsurAllHistory",          ActPendInsurAllHistory),
         new("AuthHistoryAllHistory",           AuthHistoryAllHistory),
         new("Boc3AllHistory",                  Boc3AllHistory),
         new("CarrierAllHistory",               CarrierAllHistory),
         new("CompanyCensus",                   CompanyCensus),
         new("CrashFile",                       CrashFile),
-        new("InsurAllHistory",                 InsurAllHistory),
+        new("InsHistAllWithHistory",           InsHistAllWithHistory),
         new("InspectionsAndCitations",         InspectionsAndCitations),
+        new("InspectionsPerUnit",              InspectionsPerUnit),
+        new("InsurAllHistory",                 InsurAllHistory),
         new("RejectedAllHistory",              RejectedAllHistory),
         new("RevocationAllHistory",            RevocationAllHistory),
-        new("SpecialStudies",                  SpecialStudies),
-        new("VehicleInspectionsAndViolations", VehicleInspectionsAndViolations),
-        new("VehicleInspectionFile",           VehicleInspectionFile),
-        new("SmsInputMotorCarrierCensus",      SmsInputMotorCarrierCensus),
-        new("SmsInputInspection",              SmsInputInspection),
-        new("SmsInputViolation",               SmsInputViolation),
         new("SmsInputCrash",                   SmsInputCrash),
+        new("SmsInputInspection",              SmsInputInspection),
+        new("SmsInputMotorCarrierCensus",      SmsInputMotorCarrierCensus),
+        new("SmsInputViolation",               SmsInputViolation),
+        new("SpecialStudies",                  SpecialStudies),
+        new("VehicleInspectionFile",           VehicleInspectionFile),
+        new("VehicleInspectionsAndViolations", VehicleInspectionsAndViolations),
     ];
 }

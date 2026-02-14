@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Http.Headers;
@@ -238,40 +237,13 @@ public sealed class FmcsaAdapter : VendorAdapterBase, IVendorAdapter
     }
     #endregion
     #region Metadata
-    
-    private readonly ReadOnlyDictionary<string,string> _endpointDescriptions = new(new Dictionary<string, string> (StringComparer.OrdinalIgnoreCase)
-    {
-        {"qh9u-swkp.json", "ActPendInsurAllHistory"},
-        {"9mw4-x3tu.json", "AuthHistoryAllHistory"},
-        {"2emp-mxtb.json", "Boc3AllHistory"},
-        {"6eyk-hxee.json", "CarrierAllHistory"},
-        {"az4n-8mr2.json", "CompanyCensus"},
-        {"aayw-vxb3.json", "CrashFile"},
-        {"6sqe-dvqs.json", "InsHistAllWithHistory"},
-        {"qbt8-7vic.json", "InspectionsAndCitations"},
-        {"wt8s-2hbx.json", "InspectionsPerUnit"},
-        {"ypjt-5ydn.json", "InsurAllHistory"},
-        {"96tg-4mhf.json", "RejectedAllHistory"},
-        {"sa6p-acbp.json", "RevocationAllHistory"},
-        {"4wxs-vbns.json", "SmsInputCrash"},
-        {"rbkj-cgst.json", "SmsInputInspection"},
-        {"kjg3-diqy.json", "SmsInputMotorCarrierCensus"},
-        {"8mt8-2mdr.json", "SmsInputViolation"},
-        {"5qik-smay.json", "SpecialStudies"},
-        {"fx4q-ay7w.json", "VehicleInspectionFile"},
-        {"876r-jsdb.json", "VehicleInspectionsAndViolations"},
-    });
-    
+
     public override string ResourceNameFriendly(string resourceName)
     {
-        if(_endpointDescriptions.ContainsKey(resourceName))
-        {
-            return _endpointDescriptions[resourceName];
-        }
-        else
-        {
-            return resourceName;
-        }
+        // Look up FriendlyName from the canonical endpoint catalog (single source of truth).
+        var entry = FmcsaEndpoints.All.FirstOrDefault(
+            e => e.Definition.ResourceName.Equals(resourceName, StringComparison.OrdinalIgnoreCase));
+        return entry?.Definition.FriendlyName ?? resourceName;
     }
     #endregion
 }

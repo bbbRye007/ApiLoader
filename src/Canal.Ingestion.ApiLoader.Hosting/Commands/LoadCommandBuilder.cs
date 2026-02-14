@@ -1,9 +1,7 @@
 using System.CommandLine;
 using System.CommandLine.Parsing;
 using Canal.Ingestion.ApiLoader.Model;
-using Canal.Ingestion.ApiLoader.Hosting.Configuration;
 using Canal.Ingestion.ApiLoader.Hosting.Helpers;
-using Microsoft.Extensions.Logging;
 
 namespace Canal.Ingestion.ApiLoader.Hosting.Commands;
 
@@ -20,14 +18,13 @@ internal static class LoadCommandBuilder
     /// </summary>
     public static Command Build(
         IReadOnlyList<EndpointEntry> endpoints,
-        LoaderSettings loaderSettings,
         Func<ParseResult, CancellationToken, LoadContext> contextFactory)
     {
         var loadCommand = new Command("load", "Load a single endpoint (dependencies auto-resolved)");
 
         foreach (var entry in endpoints)
         {
-            var endpointCommand = BuildEndpointCommand(entry, endpoints, loaderSettings, contextFactory);
+            var endpointCommand = BuildEndpointCommand(entry, endpoints, contextFactory);
             loadCommand.Subcommands.Add(endpointCommand);
         }
 
@@ -37,7 +34,6 @@ internal static class LoadCommandBuilder
     private static Command BuildEndpointCommand(
         EndpointEntry entry,
         IReadOnlyList<EndpointEntry> allEndpoints,
-        LoaderSettings loaderSettings,
         Func<ParseResult, CancellationToken, LoadContext> contextFactory)
     {
         var def = entry.Definition;
@@ -148,8 +144,7 @@ internal static class LoadCommandBuilder
                     endUtc,
                     saveBehavior,
                     saveWatermark: !noSaveWatermark,
-                    bodyParamsJson,
-                    dryRun: false).ConfigureAwait(false);
+                    bodyParamsJson).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {

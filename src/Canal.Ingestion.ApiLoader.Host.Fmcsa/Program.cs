@@ -6,7 +6,6 @@ using System.Reflection;
 
 return await new VendorHostBuilder()
     .WithVendorName("FMCSA")
-    .WithExecutableName("apiloader-fmcsa")
     .WithAdapterFactory((httpClient, loggerFactory) =>
         new FmcsaAdapter(
             httpClient,
@@ -15,7 +14,9 @@ return await new VendorHostBuilder()
     .ConfigureAppConfiguration(builder =>
     {
         var stream = Assembly.GetExecutingAssembly()
-            .GetManifestResourceStream("Canal.Ingestion.ApiLoader.Host.Fmcsa.hostDefaults.json");
-        if (stream is not null) builder.AddJsonStream(stream);
+            .GetManifestResourceStream("Canal.Ingestion.ApiLoader.Host.Fmcsa.hostDefaults.json")
+            ?? throw new InvalidOperationException(
+                "Embedded resource 'Canal.Ingestion.ApiLoader.Host.Fmcsa.hostDefaults.json' not found. Check the .csproj EmbeddedResource entry.");
+        builder.AddJsonStream(stream);
     })
     .RunAsync(args);

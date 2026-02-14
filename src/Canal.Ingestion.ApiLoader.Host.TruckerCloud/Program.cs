@@ -9,7 +9,6 @@ var tcSettings = new TruckerCloudSettings();
 
 return await new VendorHostBuilder()
     .WithVendorName("TruckerCloud")
-    .WithExecutableName("apiloader-truckercloud")
     .WithAdapterFactory((httpClient, loggerFactory) =>
         new TruckerCloudAdapter(
             httpClient,
@@ -21,7 +20,9 @@ return await new VendorHostBuilder()
     .ConfigureAppConfiguration(builder =>
     {
         var stream = Assembly.GetExecutingAssembly()
-            .GetManifestResourceStream("Canal.Ingestion.ApiLoader.Host.TruckerCloud.hostDefaults.json");
-        if (stream is not null) builder.AddJsonStream(stream);
+            .GetManifestResourceStream("Canal.Ingestion.ApiLoader.Host.TruckerCloud.hostDefaults.json")
+            ?? throw new InvalidOperationException(
+                "Embedded resource 'Canal.Ingestion.ApiLoader.Host.TruckerCloud.hostDefaults.json' not found. Check the .csproj EmbeddedResource entry.");
+        builder.AddJsonStream(stream);
     })
     .RunAsync(args);

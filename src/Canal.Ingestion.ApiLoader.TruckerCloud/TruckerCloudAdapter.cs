@@ -48,6 +48,7 @@ public sealed class TruckerCloudAdapter : VendorAdapterBase, IVendorAdapter
 
     private string? _authToken;
     private bool _credentialInvalid;
+    // Not disposed — lives for the process lifetime; IVendorAdapter does not extend IDisposable.
     private readonly SemaphoreSlim _authLock = new(1, 1);
 
     #endregion

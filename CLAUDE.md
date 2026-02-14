@@ -82,10 +82,9 @@ Core ApiLoader → Canal.Storage.Adls
 
 Each vendor host is a thin `Program.cs` that uses `VendorHostBuilder` (fluent builder pattern) to:
 1. Register the vendor name and adapter factory (`Func<HttpClient, ILoggerFactory, IVendorAdapter>`)
-2. Set the CLI executable name via `WithExecutableName()` (shown in help/usage output)
-3. Register the endpoint catalog (`IReadOnlyList<EndpointEntry>`)
-4. Optionally bind vendor-specific settings (e.g., `TruckerCloudSettings`)
-5. Load embedded `hostDefaults.json` defaults
+2. Register the endpoint catalog (`IReadOnlyList<EndpointEntry>`)
+3. Optionally bind vendor-specific settings (e.g., `TruckerCloudSettings`)
+4. Load embedded `hostDefaults.json` defaults
 
 `VendorHostBuilder.RunAsync(args)` builds the configuration stack (embedded defaults → `appsettings.json` → env vars → CLI args), constructs the `System.CommandLine` root command with `load` and `list` subcommands, and invokes it.
 
@@ -125,7 +124,7 @@ CLI options on `load` subcommands are **derived from endpoint metadata** — e.g
 3. Define endpoints as `EndpointDefinition` instances with `Description` and `DependsOn` metadata
 4. Add a `static IReadOnlyList<EndpointEntry> All` property to the endpoints class
 5. Create a new Exe project referencing `Canal.Ingestion.ApiLoader.Hosting` and the adapter project
-6. Write a `Program.cs` (~20-30 lines) using `VendorHostBuilder`; call `WithExecutableName()` to set the CLI executable name shown in help/usage
+6. Write a `Program.cs` (~20-30 lines) using `VendorHostBuilder`
 7. Add embedded `hostDefaults.json` with default configuration
    - The host `.csproj` must embed the file via `<EmbeddedResource Include="hostDefaults.json" />`
    - `Program.cs` must load it via `Assembly.GetManifestResourceStream(...)` using the fully-qualified resource name (namespace + filename)

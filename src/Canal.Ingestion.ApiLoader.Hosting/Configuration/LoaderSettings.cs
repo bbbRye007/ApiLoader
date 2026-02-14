@@ -11,4 +11,20 @@ public sealed class LoaderSettings
     public int LookbackDays { get; set; } = 90;
     public string Storage { get; set; } = "adls";
     public string LocalStoragePath { get; set; } = @"C:\Temp\ApiLoaderOutput";
+
+    /// <summary>
+    /// Creates a shallow copy so CLI overrides do not mutate the shared instance.
+    /// </summary>
+    public LoaderSettings Snapshot() => new()
+    {
+        Environment = Environment,
+        MaxRetries = MaxRetries,
+        MinRetryDelayMs = MinRetryDelayMs,
+        MaxDop = MaxDop,
+        SaveBehavior = SaveBehavior,
+        SaveWatermark = SaveWatermark,
+        LookbackDays = LookbackDays,
+        Storage = Storage,
+        LocalStoragePath = LocalStoragePath
+    };
 }
