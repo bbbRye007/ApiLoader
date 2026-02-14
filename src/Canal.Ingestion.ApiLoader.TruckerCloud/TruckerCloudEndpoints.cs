@@ -181,17 +181,17 @@ public static class TruckerCloudEndpoints
     /// <summary>All TruckerCloud endpoints as CLI-ready entries.</summary>
     public static IReadOnlyList<EndpointEntry> All { get; } =
     [
-        new("CarriersV4",          CarriersV4),
-        new("VehiclesV4",          VehiclesV4),
-        new("SubscriptionsV4",     SubscriptionsV4),
-        new("DriversV4",           DriversV4),
-        new("RiskScoresV4",        RiskScoresV4),
-        new("VehicleIgnitionV4",   VehicleIgnitionV4),
-        new("SafetyEventsV5",      SafetyEventsV5),
-        new("RadiusOfOperationV4", RadiusOfOperationV4),
-        new("GpsMilesV4",          GpsMilesV4),
-        new("ZipCodeMilesV4",      ZipCodeMilesV4),
-        new("TripsV5",             TripsV5),
+        new(nameof(CarriersV4),          CarriersV4),
+        new(nameof(VehiclesV4),          VehiclesV4),
+        new(nameof(SubscriptionsV4),     SubscriptionsV4),
+        new(nameof(DriversV4),           DriversV4),
+        new(nameof(RiskScoresV4),        RiskScoresV4),
+        new(nameof(VehicleIgnitionV4),   VehicleIgnitionV4),
+        new(nameof(SafetyEventsV5),      SafetyEventsV5),
+        new(nameof(RadiusOfOperationV4), RadiusOfOperationV4),
+        new(nameof(GpsMilesV4),          GpsMilesV4),
+        new(nameof(ZipCodeMilesV4),      ZipCodeMilesV4),
+        new(nameof(TripsV5),             TripsV5),
     ];
 
     // ── Extractor helpers ───────────────────────────────────────────────

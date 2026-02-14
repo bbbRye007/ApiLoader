@@ -108,8 +108,20 @@ public sealed class VendorHostBuilder
         // ── 2. Build IConfiguration ──
         var configBuilder = new ConfigurationBuilder();
 
-        // Vendor-specific config sources first (lowest precedence — embedded defaults)
-        foreach (var cb in _configCallbacks) cb(configBuilder);
+        // Vendor-specific config sources first (lowest precedence — embedded defaults).
+        // Run all callbacks even if one throws; collect and rethrow as AggregateException.
+        List<Exception>? configErrors = null;
+        foreach (var cb in _configCallbacks)
+        {
+            try { cb(configBuilder); }
+            catch (Exception ex)
+            {
+                configErrors ??= [];
+                configErrors.Add(ex);
+            }
+        }
+        if (configErrors is not null)
+            throw new AggregateException("One or more configuration callbacks failed.", configErrors);
 
         // External appsettings.json (optional)
         configBuilder.AddJsonFile("appsettings.json", optional: true);
@@ -255,22 +267,31 @@ public sealed class VendorHostBuilder
                 httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
 
                 // g. Invoke adapter factory
-                var adapter = adapterFactory(httpClient, loggerFactory);
-
-                // h. Create EndpointLoaderFactory
-                var factory = new EndpointLoaderFactory(
-                    adapter, store, settings.Environment,
-                    settings.MaxDop, settings.MaxRetries, settings.MinRetryDelayMs, loggerFactory);
-
-                return new LoadContext(
-                    loggerFactory, httpClient, linkedCts, processCts,
-                    cleanupEventHandlers: cleanupHandlers)
+                IVendorAdapter? adapter = null;
+                try
                 {
-                    Factory = factory,
-                    Endpoints = endpoints,
-                    Logger = hostLogger,
-                    CancellationToken = linkedCts.Token
-                };
+                    adapter = adapterFactory(httpClient, loggerFactory);
+
+                    // h. Create EndpointLoaderFactory
+                    var factory = new EndpointLoaderFactory(
+                        adapter, store, settings.Environment,
+                        settings.MaxDop, settings.MaxRetries, settings.MinRetryDelayMs, loggerFactory);
+
+                    return new LoadContext(
+                        loggerFactory, httpClient, linkedCts, processCts,
+                        cleanupEventHandlers: cleanupHandlers)
+                    {
+                        Factory = factory,
+                        Endpoints = endpoints,
+                        Logger = hostLogger,
+                        CancellationToken = linkedCts.Token
+                    };
+                }
+                catch
+                {
+                    (adapter as IDisposable)?.Dispose();
+                    throw;
+                }
             }
             catch
             {

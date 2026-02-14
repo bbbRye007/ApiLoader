@@ -17,6 +17,7 @@ internal sealed class LoadContext : IDisposable
     private readonly CancellationTokenSource _linkedCts;
     private readonly CancellationTokenSource _processCts;
     private readonly Action _cleanupEventHandlers;
+    private bool _disposed;
 
     public LoadContext(
         ILoggerFactory loggerFactory,
@@ -39,6 +40,9 @@ internal sealed class LoadContext : IDisposable
 
     public void Dispose()
     {
+        if (_disposed) return;
+        _disposed = true;
+
         try
         {
             _cleanupEventHandlers();

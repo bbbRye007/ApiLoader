@@ -238,12 +238,20 @@ public sealed class FmcsaAdapter : VendorAdapterBase, IVendorAdapter
     #endregion
     #region Metadata
 
+    /// <summary>
+    /// O(1) lookup cache: resource name → friendly name, built once from the endpoint catalog.
+    /// </summary>
+    private static readonly Dictionary<string, string> FriendlyNamesByResource =
+        FmcsaEndpoints.All.ToDictionary(
+            e => e.Definition.ResourceName,
+            e => e.Definition.FriendlyName,
+            StringComparer.OrdinalIgnoreCase);
+
     public override string ResourceNameFriendly(string resourceName)
     {
-        // Look up FriendlyName from the canonical endpoint catalog (single source of truth).
-        var entry = FmcsaEndpoints.All.FirstOrDefault(
-            e => e.Definition.ResourceName.Equals(resourceName, StringComparison.OrdinalIgnoreCase));
-        return entry?.Definition.FriendlyName ?? resourceName;
+        return FriendlyNamesByResource.TryGetValue(resourceName, out var friendly)
+            ? friendly
+            : resourceName;
     }
     #endregion
 }
