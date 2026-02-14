@@ -16,7 +16,8 @@ public static class TruckerCloudEndpoints
     {
         ResourceName = "carriers", FriendlyName = "Carriers", ResourceVersion = 4,
         DefaultPageSize = 1000,
-        BuildRequests = RequestBuilders.Simple
+        BuildRequests = RequestBuilders.Simple,
+        Description = "All carriers. Iteration source for most TC endpoints."
     };
 
     /// <summary>
@@ -27,7 +28,8 @@ public static class TruckerCloudEndpoints
     {
         ResourceName = "vehicles", FriendlyName = "Vehicles", ResourceVersion = 4,
         DefaultPageSize = 1000,
-        BuildRequests = RequestBuilders.Simple
+        BuildRequests = RequestBuilders.Simple,
+        Description = "All vehicles. Iteration source for VehicleIgnitionV4."
     };
 
     /// <summary>
@@ -37,7 +39,8 @@ public static class TruckerCloudEndpoints
     {
         ResourceName = "subscriptions", FriendlyName = "Subscriptions", ResourceVersion = 4,
         DefaultPageSize = 1000,
-        BuildRequests = RequestBuilders.Simple
+        BuildRequests = RequestBuilders.Simple,
+        Description = "All subscriptions."
     };
 
     // ── Carrier-dependent endpoints (require iterationList from CarriersV4) ──
@@ -51,7 +54,9 @@ public static class TruckerCloudEndpoints
         ResourceName = "drivers", FriendlyName = "Drivers", ResourceVersion = 4,
         DefaultPageSize = 1000,
         RequiresIterationList = true,
-        BuildRequests = RequestBuilders.CarrierDependent(ExtractCarrierCodes)
+        BuildRequests = RequestBuilders.CarrierDependent(ExtractCarrierCodes),
+        Description = "Drivers per carrier.",
+        DependsOn = "CarriersV4"
     };
 
     /// <summary>
@@ -63,7 +68,9 @@ public static class TruckerCloudEndpoints
         ResourceName = "risk-scores", FriendlyName = "RiskScores", ResourceVersion = 4,
         DefaultPageSize = 1000,
         RequiresIterationList = true,
-        BuildRequests = RequestBuilders.CarrierDependent(ExtractCarrierCodes)
+        BuildRequests = RequestBuilders.CarrierDependent(ExtractCarrierCodes),
+        Description = "Risk scores per carrier.",
+        DependsOn = "CarriersV4"
     };
 
     /// <summary>
@@ -76,7 +83,9 @@ public static class TruckerCloudEndpoints
         ResourceName = "vehicles/ignition", FriendlyName = "VehicleIgnition", ResourceVersion = 4,
         DefaultPageSize = 1000,
         RequiresIterationList = true,
-        BuildRequests = RequestBuilders.CarrierDependent(ExtractVehicleData)
+        BuildRequests = RequestBuilders.CarrierDependent(ExtractVehicleData),
+        Description = "Vehicle ignition data. WARNING: very large payloads.",
+        DependsOn = "VehiclesV4"
     };
 
     // ── Carrier + time-window endpoints (require iterationList from CarriersV4, support watermark) ──
@@ -93,7 +102,9 @@ public static class TruckerCloudEndpoints
         DefaultPageSize = 100,
         RequiresIterationList = true,
         MinTimeSpan = TimeSpan.FromHours(12),
-        BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld_ShortNames, startParamName: "startTime", endParamName: "endTime", timeFormat: "yyyy-MM-dd'T'HH:mm:ss.fff'Z'")
+        BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld_ShortNames, startParamName: "startTime", endParamName: "endTime", timeFormat: "yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
+        Description = "Safety events per carrier+ELD within a time window.",
+        DependsOn = "CarriersV4"
     };
 
     /// <summary>
@@ -108,7 +119,9 @@ public static class TruckerCloudEndpoints
         DefaultPageSize = 1000,
         RequiresIterationList = true,
         MinTimeSpan = TimeSpan.FromHours(12),
-        BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld_ShortNames, startParamName: "startTime", endParamName: "endTime")
+        BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld_ShortNames, startParamName: "startTime", endParamName: "endTime"),
+        Description = "Radius of operation within a time window.",
+        DependsOn = "CarriersV4"
     };
 
     /// <summary>
@@ -123,7 +136,9 @@ public static class TruckerCloudEndpoints
         DefaultPageSize = 1000,
         RequiresIterationList = true,
         MinTimeSpan = TimeSpan.FromHours(12),
-        BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld_StandardNames, startParamName: "startDateTime", endParamName: "endDateTime")
+        BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld_StandardNames, startParamName: "startDateTime", endParamName: "endDateTime"),
+        Description = "GPS miles within a time window.",
+        DependsOn = "CarriersV4"
     };
 
     /// <summary>
@@ -138,7 +153,9 @@ public static class TruckerCloudEndpoints
         DefaultPageSize = 1000,
         RequiresIterationList = true,
         MinTimeSpan = TimeSpan.FromHours(12),
-        BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld_StandardNames, startParamName: "startDateTime", endParamName: "endDateTime")
+        BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld_StandardNames, startParamName: "startDateTime", endParamName: "endDateTime"),
+        Description = "Zip code miles within a time window.",
+        DependsOn = "CarriersV4"
     };
 
     /// <summary>
@@ -154,8 +171,28 @@ public static class TruckerCloudEndpoints
         RequiresIterationList = true,
         MinTimeSpan = TimeSpan.FromHours(8),
         MaxTimeSpan = TimeSpan.FromDays(1) - TimeSpan.FromSeconds(1),
-        BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld_StandardNames, startParamName: "startDateTime", endParamName: "endDateTime")
+        BuildRequests = RequestBuilders.CarrierAndTimeWindow(ExtractCarrierCodesAndEld_StandardNames, startParamName: "startDateTime", endParamName: "endDateTime"),
+        Description = "Trip data within a time window (max ~24h).",
+        DependsOn = "CarriersV4"
     };
+
+    // ── Endpoint catalog ──────────────────────────────────────────────
+
+    /// <summary>All TruckerCloud endpoints as CLI-ready entries.</summary>
+    public static IReadOnlyList<EndpointEntry> All { get; } =
+    [
+        new("CarriersV4",          CarriersV4),
+        new("VehiclesV4",          VehiclesV4),
+        new("SubscriptionsV4",     SubscriptionsV4),
+        new("DriversV4",           DriversV4),
+        new("RiskScoresV4",        RiskScoresV4),
+        new("VehicleIgnitionV4",   VehicleIgnitionV4),
+        new("SafetyEventsV5",      SafetyEventsV5),
+        new("RadiusOfOperationV4", RadiusOfOperationV4),
+        new("GpsMilesV4",          GpsMilesV4),
+        new("ZipCodeMilesV4",      ZipCodeMilesV4),
+        new("TripsV5",             TripsV5),
+    ];
 
     // ── Extractor helpers ───────────────────────────────────────────────
 
