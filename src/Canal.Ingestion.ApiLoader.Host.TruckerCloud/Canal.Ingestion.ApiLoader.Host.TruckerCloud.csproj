@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="hostDefaults.json" />
+    <EmbeddedResource Include="truckerCloudDefaults.json" />
   </ItemGroup>
 
 </Project>

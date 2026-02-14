@@ -16,5 +16,4 @@
     <ProjectReference Include="..\Canal.Ingestion.ApiLoader.Fmcsa\Canal.Ingestion.ApiLoader.Fmcsa.csproj" />
   </ItemGroup>
 
-
 </Project>

@@ -5,7 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Reflection;
 
-const string EmbeddedDefaultsResource = "Canal.Ingestion.ApiLoader.Host.TruckerCloud.hostDefaults.json";
+const string EmbeddedDefaultsResource = "Canal.Ingestion.ApiLoader.Host.TruckerCloud.truckerCloudDefaults.json";
 
 // tcSettings is instantiated before config is built. WithVendorSettings registers it for
 // later binding during RunAsync. The adapter factory closure captures tcSettings by reference;
@@ -24,10 +24,14 @@ return await new VendorHostBuilder()
     .WithVendorSettings("TruckerCloud", tcSettings)
     .ConfigureAppConfiguration(builder =>
     {
-        var stream = Assembly.GetExecutingAssembly()
+        // Copy into MemoryStream so the native resource stream can be disposed immediately.
+        using var stream = Assembly.GetExecutingAssembly()
             .GetManifestResourceStream(EmbeddedDefaultsResource)
             ?? throw new InvalidOperationException(
                 $"Embedded resource '{EmbeddedDefaultsResource}' not found. Check the .csproj EmbeddedResource entry.");
-        builder.AddJsonStream(stream);
+        var mem = new MemoryStream();
+        stream.CopyTo(mem);
+        mem.Position = 0;
+        builder.AddJsonStream(mem);
     })
     .RunAsync(args);

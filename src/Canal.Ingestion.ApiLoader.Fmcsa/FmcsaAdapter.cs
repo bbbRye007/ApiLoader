@@ -27,7 +27,7 @@ public sealed class FmcsaAdapter : VendorAdapterBase, IVendorAdapter
     private const string BaseUrlConst = "https://data.transportation.gov/resource/";
     public override string IngestionDomain => IngestionDomainConst;
     public override string VendorName => VendorNameConst;
-    public override string BaseUrl => HttpClient?.BaseAddress?.ToString().TrimEnd('/') ?? string.Empty;
+    public override string BaseUrl => HttpClient.BaseAddress?.ToString().TrimEnd('/') ?? string.Empty;
     
     // "External" meaning: the source system is outside Canal's control.
     public override bool IsExternalSource { get; } = true;
@@ -58,7 +58,7 @@ public sealed class FmcsaAdapter : VendorAdapterBase, IVendorAdapter
         // FMCSA does not require auth.
         // Default to */* unless the caller wants something else.
         httpRequest.Headers.Accept.Clear();
-        httpRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*")); // could change to "applicationdata/json" instead of "anything goes".. 
+        httpRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*")); // could change to "application/json" instead of "anything goes"
         foreach (var (k, v) in request.RequestHeaders)
         {
             if (string.IsNullOrWhiteSpace(k)) continue;

@@ -1,5 +1,7 @@
+using Canal.Ingestion.ApiLoader.Adapters;
 using Canal.Ingestion.ApiLoader.Client;
 using Canal.Ingestion.ApiLoader.Model;
+using Canal.Ingestion.ApiLoader.Storage;
 using Microsoft.Extensions.Logging;
 
 namespace Canal.Ingestion.ApiLoader.Hosting.Commands;
@@ -21,8 +23,8 @@ internal sealed class LoadContext : IDisposable
     /// Defensive: neither IVendorAdapter nor IIngestionStore is IDisposable today,
     /// but stored for disposal in case future implementations hold resources.
     /// </summary>
-    private readonly object? _vendorAdapter;
-    private readonly object? _ingestionStore;
+    private readonly IVendorAdapter? _vendorAdapter;
+    private readonly IIngestionStore? _ingestionStore;
     private bool _disposed;
 
     public LoadContext(
@@ -31,8 +33,8 @@ internal sealed class LoadContext : IDisposable
         CancellationTokenSource linkedCts,
         CancellationTokenSource processCts,
         Action cleanupEventHandlers,
-        object? vendorAdapter = null,
-        object? ingestionStore = null)
+        IVendorAdapter? vendorAdapter = null,
+        IIngestionStore? ingestionStore = null)
     {
         _loggerFactory = loggerFactory;
         _httpClient = httpClient;

@@ -109,10 +109,17 @@ public sealed class VendorHostBuilder
         var configBuilder = new ConfigurationBuilder();
 
         // Shared defaults from the Hosting library (lowest precedence).
-        var sharedDefaultsStream = typeof(VendorHostBuilder).Assembly
-            .GetManifestResourceStream("Canal.Ingestion.ApiLoader.Hosting.sharedDefaults.json");
-        if (sharedDefaultsStream is not null)
-            configBuilder.AddJsonStream(sharedDefaultsStream);
+        // Copy into a MemoryStream so the native resource stream can be disposed immediately.
+        using (var sharedDefaultsStream = typeof(VendorHostBuilder).Assembly
+            .GetManifestResourceStream("Canal.Ingestion.ApiLoader.Hosting.sharedDefaults.json")
+            ?? throw new InvalidOperationException(
+                "Embedded resource 'Canal.Ingestion.ApiLoader.Hosting.sharedDefaults.json' not found. Verify the Hosting .csproj EmbeddedResource entry."))
+        {
+            var mem = new MemoryStream();
+            sharedDefaultsStream.CopyTo(mem);
+            mem.Position = 0;
+            configBuilder.AddJsonStream(mem);
+        }
 
         // Vendor-specific config sources next (override shared defaults).
         // Run all callbacks even if one throws; collect and rethrow as AggregateException.
@@ -141,6 +148,11 @@ public sealed class VendorHostBuilder
         // ── 3. Bind shared settings ──
         var loader = new LoaderSettings();
         config.GetSection("Loader").Bind(loader);
+
+        // Fail fast if config contains an invalid SaveBehavior value
+        if (!Enum.TryParse<SaveBehavior>(loader.SaveBehavior, ignoreCase: true, out _))
+            throw new InvalidOperationException(
+                $"Configuration value 'Loader:SaveBehavior' must be PerPage, AfterAll, or None, but was '{loader.SaveBehavior}'.");
 
         var azSettings = new AzureSettings();
         config.GetSection("Azure").Bind(azSettings);
@@ -194,6 +206,9 @@ public sealed class VendorHostBuilder
             if (settings.MaxRetries < 0)
                 throw new InvalidOperationException(
                     $"Configuration value 'Loader:MaxRetries' must be non-negative, but was {settings.MaxRetries}.");
+            if (settings.MinRetryDelayMs < 0)
+                throw new InvalidOperationException(
+                    $"Configuration value 'Loader:MinRetryDelayMs' must be non-negative, but was {settings.MinRetryDelayMs}.");
 
             var envVal = parseResult.GetValue(environmentOption);
             if (envVal is not null) settings.Environment = envVal;

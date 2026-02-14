@@ -29,6 +29,11 @@ internal static class DependencyResolver
         EndpointEntry target,
         IReadOnlyList<EndpointEntry> allEndpoints)
     {
+        // O(1) lookup by name for dependency resolution
+        var lookup = new Dictionary<string, EndpointEntry>(allEndpoints.Count, StringComparer.OrdinalIgnoreCase);
+        foreach (var ep in allEndpoints)
+            lookup[ep.Name] = ep;
+
         var chain = new List<EndpointEntry>();
         var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var current = target;
@@ -51,9 +56,9 @@ internal static class DependencyResolver
             if (dependsOn is null)
                 break;
 
-            current = allEndpoints.FirstOrDefault(
-                e => e.Name.Equals(dependsOn, StringComparison.OrdinalIgnoreCase))
-                ?? throw new InvalidOperationException(
+            current = lookup.TryGetValue(dependsOn, out var dep)
+                ? dep
+                : throw new InvalidOperationException(
                     $"Dependency '{dependsOn}' not found for endpoint '{current.Name}'.");
         }
 
