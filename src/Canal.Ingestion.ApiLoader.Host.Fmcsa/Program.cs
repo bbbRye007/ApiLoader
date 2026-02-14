@@ -11,7 +11,8 @@ return await new VendorHostBuilder()
     .WithAdapterFactory((httpClient, loggerFactory) =>
         new FmcsaAdapter(
             httpClient,
-            loggerFactory.CreateLogger<FmcsaAdapter>()))
+            loggerFactory.CreateLogger<FmcsaAdapter>(),
+            FmcsaEndpoints.All))
     .WithEndpoints(FmcsaEndpoints.All)
     .ConfigureAppConfiguration(builder =>
     {

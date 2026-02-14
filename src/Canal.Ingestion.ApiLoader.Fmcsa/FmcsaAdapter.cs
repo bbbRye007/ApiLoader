@@ -38,15 +38,18 @@ public sealed class FmcsaAdapter : VendorAdapterBase, IVendorAdapter
     #endregion
     #region Construction
     [SetsRequiredMembers]
-    public FmcsaAdapter(HttpClient httpClient, ILogger<FmcsaAdapter> logger)
+    public FmcsaAdapter(HttpClient httpClient, ILogger<FmcsaAdapter> logger, IReadOnlyList<EndpointEntry>? endpoints = null)
       : base(httpClient)
     {
         _logger = logger;
+        _friendlyNamesByResource = (endpoints ?? FmcsaEndpoints.All).ToFrozenDictionary(
+            e => e.Definition.ResourceName,
+            e => e.Definition.FriendlyName,
+            StringComparer.OrdinalIgnoreCase);
         // These should NOT affect the request identity (same "logical request" across pages).
         HttpClient.BaseAddress = new Uri(BaseUrlConst.TrimEnd('/'));
         QueryParamsToExcludeFromPayloadIdentifers.Add("$limit");
         QueryParamsToExcludeFromPayloadIdentifers.Add("$offset");
-
     }
     #endregion
     #region IVendorAdapter: Request shaping
@@ -240,17 +243,14 @@ public sealed class FmcsaAdapter : VendorAdapterBase, IVendorAdapter
     #region Metadata
 
     /// <summary>
-    /// O(1) lookup cache: resource name → friendly name, built once from the endpoint catalog.
+    /// O(1) lookup cache: resource name → friendly name, built once from the endpoint catalog
+    /// provided at construction time.
     /// </summary>
-    private static readonly FrozenDictionary<string, string> FriendlyNamesByResource =
-        FmcsaEndpoints.All.ToFrozenDictionary(
-            e => e.Definition.ResourceName,
-            e => e.Definition.FriendlyName,
-            StringComparer.OrdinalIgnoreCase);
+    private readonly FrozenDictionary<string, string> _friendlyNamesByResource;
 
     public override string ResourceNameFriendly(string resourceName)
     {
-        return FriendlyNamesByResource.TryGetValue(resourceName, out var friendly)
+        return _friendlyNamesByResource.TryGetValue(resourceName, out var friendly)
             ? friendly
             : resourceName;
     }
