@@ -1,0 +1,109 @@
+using Canal.Ingestion.ApiLoader.Client;
+using Canal.Ingestion.ApiLoader.Model;
+using Microsoft.Extensions.Logging;
+
+namespace Canal.Ingestion.ApiLoader.Hosting.Commands;
+
+/// <summary>
+/// Executes the load for a single endpoint. Resolves dependency chain, auto-fetches
+/// dependencies (unsaved), then loads the target endpoint with user-specified parameters.
+/// Functionally equivalent to the current <c>LoadCommand.RunAsync</c> but vendor-agnostic.
+/// </summary>
+internal static class LoadCommandHandler
+{
+    /// <summary>
+    /// Runs the load operation. Called by the System.CommandLine handler for each
+    /// endpoint subcommand.
+    /// </summary>
+    /// <returns>Exit code: 0 = success, 1 = error.</returns>
+    public static async Task<int> ExecuteAsync(
+        EndpointEntry target,
+        IReadOnlyList<EndpointEntry> allEndpoints,
+        EndpointLoaderFactory factory,
+        ILogger logger,
+        CancellationToken cancellationToken,
+        int? pageSize,
+        int? maxPages,
+        DateTimeOffset? startUtc,
+        DateTimeOffset? endUtc,
+        SaveBehavior saveBehavior,
+        bool saveWatermark,
+        string bodyParamsJson,
+        bool dryRun)
+    {
+        // Resolve dependency chain
+        List<EndpointEntry> chain;
+        try
+        {
+            chain = DependencyResolver.Resolve(target, allEndpoints);
+        }
+        catch (InvalidOperationException ex)
+        {
+            logger.LogError("Dependency resolution failed: {Message}", ex.Message);
+            return 1;
+        }
+
+        // Dry run
+        if (dryRun)
+        {
+            Console.WriteLine();
+            Console.WriteLine("=== DRY RUN ===");
+            Console.WriteLine($"Endpoint:      {target.Name} (v{target.Definition.ResourceVersion})");
+            Console.WriteLine($"Resource:      {target.Definition.ResourceName}");
+            Console.WriteLine($"Save behavior: {saveBehavior}");
+            Console.WriteLine($"Watermark:     {(saveWatermark ? "save" : "skip")}");
+            if (startUtc.HasValue) Console.WriteLine($"Start:         {startUtc.Value:O}");
+            if (endUtc.HasValue)   Console.WriteLine($"End:           {endUtc.Value:O}");
+            if (pageSize.HasValue) Console.WriteLine($"Page size:     {pageSize.Value}");
+            if (maxPages.HasValue) Console.WriteLine($"Max pages:     {maxPages.Value}");
+            if (chain.Count > 1)
+            {
+                Console.WriteLine();
+                Console.WriteLine("Dependency chain (executed in order):");
+                for (int i = 0; i < chain.Count; i++)
+                {
+                    var isTarget = (i == chain.Count - 1);
+                    Console.WriteLine($"  {i + 1}. {chain[i].Name} v{chain[i].Definition.ResourceVersion}{(isTarget ? "  <-- target (saved)" : "  (fetched, not saved)")}");
+                }
+            }
+            Console.WriteLine();
+            Console.WriteLine("No data will be fetched.");
+            return 0;
+        }
+
+        // Execute chain
+        List<FetchResult>? iterationList = null;
+        for (int i = 0; i < chain.Count; i++)
+        {
+            var step = chain[i];
+            var isTarget = (i == chain.Count - 1);
+
+            if (!isTarget)
+            {
+                logger.LogInformation("Auto-fetching dependency: {Endpoint} (unsaved, for iteration list)", step.Name);
+                iterationList = await factory.Create(step.Definition).Load(
+                    cancellationToken: cancellationToken,
+                    saveBehavior: SaveBehavior.None,
+                    saveWatermark: false
+                ).ConfigureAwait(false);
+            }
+            else
+            {
+                logger.LogInformation("Loading target endpoint: {Endpoint}", step.Name);
+                await factory.Create(step.Definition).Load(
+                    iterationList: iterationList,
+                    overrideStartUtc: startUtc,
+                    overrideEndUtc: endUtc,
+                    pageSize: pageSize,
+                    maxPages: maxPages,
+                    saveBehavior: saveBehavior,
+                    saveWatermark: saveWatermark,
+                    bodyParamsJson: bodyParamsJson,
+                    cancellationToken: cancellationToken
+                ).ConfigureAwait(false);
+            }
+        }
+
+        return 0;
+    }
+}

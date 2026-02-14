@@ -1,6 +1,9 @@
 using System.CommandLine;
+using System.CommandLine.Parsing;
 using Canal.Ingestion.ApiLoader.Model;
 using Canal.Ingestion.ApiLoader.Hosting.Configuration;
+using Canal.Ingestion.ApiLoader.Hosting.Helpers;
+using Microsoft.Extensions.Logging;
 
 namespace Canal.Ingestion.ApiLoader.Hosting.Commands;
 
@@ -22,14 +25,158 @@ internal static class LoadCommandBuilder
     {
         var loadCommand = new Command("load", "Load a single endpoint (dependencies auto-resolved)");
 
-        // Placeholder — fully implemented in commit 6
         foreach (var entry in endpoints)
         {
-            var endpointCommand = new Command(entry.Name, BuildDescription(entry));
+            var endpointCommand = BuildEndpointCommand(entry, endpoints, loaderSettings, contextFactory);
             loadCommand.Subcommands.Add(endpointCommand);
         }
 
         return loadCommand;
+    }
+
+    private static Command BuildEndpointCommand(
+        EndpointEntry entry,
+        IReadOnlyList<EndpointEntry> allEndpoints,
+        LoaderSettings loaderSettings,
+        Func<ParseResult, LoadContext> contextFactory)
+    {
+        var def = entry.Definition;
+        var endpointCommand = new Command(entry.Name, BuildDescription(entry));
+
+        // ── Always-present options ──
+        var maxPagesOption = new Option<int?>("--max-pages")
+        { Description = "Stop after N pages per request" };
+
+        var saveBehaviorOption = new Option<string>("--save-behavior")
+        { Description = "PerPage | AfterAll | None", DefaultValueFactory = _ => "PerPage" };
+
+        var dryRunOption = new Option<bool>("--dry-run")
+        { Description = "Show execution plan without fetching" };
+
+        endpointCommand.Options.Add(maxPagesOption);
+        endpointCommand.Options.Add(saveBehaviorOption);
+        endpointCommand.Options.Add(dryRunOption);
+
+        // ── Conditionally-present options ──
+        Option<int?>? pageSizeOption = null;
+        if (def.DefaultPageSize is not null)
+        {
+            pageSizeOption = new Option<int?>("--page-size")
+            { Description = $"Override default page size [default: {def.DefaultPageSize}]" };
+            endpointCommand.Options.Add(pageSizeOption);
+        }
+
+        Option<DateTimeOffset?>? startUtcOption = null;
+        Option<DateTimeOffset?>? endUtcOption = null;
+        Option<bool>? noSaveWatermarkOption = null;
+        if (def.SupportsWatermark)
+        {
+            startUtcOption = new Option<DateTimeOffset?>("--start-utc")
+            {
+                Description = "Start of time window (default: from watermark)",
+                CustomParser = ParseDateTimeOffset
+            };
+
+            endUtcOption = new Option<DateTimeOffset?>("--end-utc")
+            {
+                Description = "End of time window (default: now)",
+                CustomParser = ParseDateTimeOffset
+            };
+
+            noSaveWatermarkOption = new Option<bool>("--no-save-watermark")
+            { Description = "Skip saving watermark after load" };
+
+            endpointCommand.Options.Add(startUtcOption);
+            endpointCommand.Options.Add(endUtcOption);
+            endpointCommand.Options.Add(noSaveWatermarkOption);
+        }
+
+        Option<string>? bodyParamsJsonOption = null;
+        if (def.HttpMethod == HttpMethod.Post)
+        {
+            bodyParamsJsonOption = new Option<string>("--body-params-json")
+            { Description = "JSON body for POST request [default: {}]", DefaultValueFactory = _ => "{}" };
+            endpointCommand.Options.Add(bodyParamsJsonOption);
+        }
+
+        // ── Handler ──
+        // Capture all option references for the closure
+        var capturedEntry = entry;
+        var capturedAllEndpoints = allEndpoints;
+
+        endpointCommand.SetAction(async (parseResult, cancellationToken) =>
+        {
+            var ctx = contextFactory(parseResult);
+
+            var maxPages = parseResult.GetValue(maxPagesOption);
+            var saveBehaviorRaw = parseResult.GetValue(saveBehaviorOption) ?? "PerPage";
+            var dryRun = parseResult.GetValue(dryRunOption);
+            var pageSize = pageSizeOption is not null ? parseResult.GetValue(pageSizeOption) : null;
+            var startUtc = startUtcOption is not null ? parseResult.GetValue(startUtcOption) : null;
+            var endUtc = endUtcOption is not null ? parseResult.GetValue(endUtcOption) : null;
+            var noSaveWatermark = noSaveWatermarkOption is not null && parseResult.GetValue(noSaveWatermarkOption);
+            var bodyParamsJson = bodyParamsJsonOption is not null
+                ? parseResult.GetValue(bodyParamsJsonOption) ?? "{}"
+                : "{}";
+
+            if (!Enum.TryParse<SaveBehavior>(saveBehaviorRaw, ignoreCase: true, out var saveBehavior))
+            {
+                ctx.Logger.LogError(
+                    "Invalid --save-behavior '{Value}'. Must be: PerPage, AfterAll, or None.", saveBehaviorRaw);
+                return 1;
+            }
+
+            try
+            {
+                return await LoadCommandHandler.ExecuteAsync(
+                    capturedEntry,
+                    capturedAllEndpoints,
+                    ctx.Factory,
+                    ctx.Logger,
+                    ctx.CancellationToken,
+                    pageSize,
+                    maxPages,
+                    startUtc,
+                    endUtc,
+                    saveBehavior,
+                    saveWatermark: !noSaveWatermark,
+                    bodyParamsJson,
+                    dryRun).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                ctx.Logger.LogWarning("Operation cancelled.");
+                return 130;
+            }
+            catch (Exception ex)
+            {
+                ctx.Logger.LogError(ex, "Unhandled error.");
+                return 1;
+            }
+        });
+
+        return endpointCommand;
+    }
+
+    /// <summary>
+    /// Custom parser for DateTimeOffset? using FlexibleDateParser.
+    /// Preserves exact parsing behaviour of the current CLI.
+    /// </summary>
+    private static DateTimeOffset? ParseDateTimeOffset(ArgumentResult result)
+    {
+        var token = result.Tokens.Count > 0 ? result.Tokens[0].Value : null;
+        if (string.IsNullOrWhiteSpace(token))
+            return null;
+
+        try
+        {
+            return FlexibleDateParser.Parse(token);
+        }
+        catch (FormatException ex)
+        {
+            result.AddError(ex.Message);
+            return null;
+        }
     }
 
     private static string BuildDescription(EndpointEntry entry)
