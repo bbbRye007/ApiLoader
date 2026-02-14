@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(git -C /c/repos/ApiLoader log --oneline -15)"
+    ]
+  }
+}
