@@ -31,11 +31,11 @@ Program.cs (Host) -> EndpointLoaderFactory -> EndpointLoader -> FetchEngine -> H
 
 | Abstraction | File | Role | Design Contract |
 |---|---|---|---|
-| `IVendorAdapter` | `Adapters/IVendorAdapter.cs` | Vendor-specific behavior (10 members) | Properties: `IngestionDomain`, `VendorName`, `BaseUrl`, `IsExternalSource`, `HttpClient`. Methods: `BuildRequestUri`, `ComputeRequestId`, `ComputeAttemptId`, `ComputePageId`, `ApplyRequestHeadersAsync`, `PostProcessSuccessfulResponse`, `RefineFetchOutcome`, `BuildFailureMessage`, `BuildMetaDataJson`, `GetNextRequestAsync`, `ResourceNameFriendly` |
+| `IVendorAdapter` | `Adapters/IVendorAdapter.cs` | Vendor-specific behavior (11 members) | Properties: `IngestionDomain`, `VendorName`, `BaseUrl`, `IsExternalSource`, `HttpClient`. Methods: `BuildRequestUri`, `ComputeRequestId`, `ComputeAttemptId`, `ComputePageId`, `ApplyRequestHeadersAsync`, `PostProcessSuccessfulResponse`, `RefineFetchOutcome`, `BuildFailureMessage`, `BuildMetaDataJson`, `GetNextRequestAsync`, `ResourceNameFriendly` |
 | `VendorAdapterBase` | `Adapters/VendorAdapterBase.cs` | Abstract base class | SHA256 ID generation with exclusion lists, JSON parsing helpers, canonical request string builder, default implementations for headers/metadata/naming |
 | `IIngestionStore` | `Storage/IIngestionStore.cs` | Storage abstraction (3 methods) | `SaveResultAsync`, `SaveWatermarkAsync`, `LoadWatermarkAsync` |
 | `EndpointDefinition` | `Model/EndpointDefinition.cs` | Declares a fetchable resource (sealed record) | `ResourceName`, `FriendlyName`, `ResourceVersion`, `BuildRequests` (delegate), `HttpMethod`, `DefaultPageSize`, `DefaultLookbackDays`, `MinTimeSpan`, `MaxTimeSpan`, `SupportsWatermark`, `RequiresIterationList` |
-| `BuildRequestsDelegate` | `Engine/RequestBuilders.cs` | Factory pattern for request construction | `Simple()` — single seed request. `CarrierDependent(extractFn)` — one request per carrier code. `CarrierAndTimeWindow(extractFn, startParam, endParam)` — carrier + time window parameters |
+| `BuildRequestsDelegate` | `Engine/RequestBuilders.cs` | Factory pattern for request construction | `Simple()` — single seed request. `CarrierDependent(extractFn)` — one request per carrier code. `CarrierAndTimeWindow(extractFn, startParam, endParam, timeFormat)` — carrier + time window parameters (defaults: `startTime`, `endTime`, `yyyy-MM-dd'T'HH:mm:ss'Z'`) |
 | `Request` | `Model/Request.cs` | HTTP request metadata container | `VendorName`, `ResourceName`, `ResourceVersion`, `Route`, `HttpMethod`, `QueryParameters`, `RequestHeaders`, `BodyParamsJson`, `PageSize`, `MaxPages`, `SequenceNr` |
 | `FetchResult` | `Model/FetchResult.cs` | HTTP response + metadata (sealed class) | `Content`, `HttpStatusCode`, `FetchOutcome`, `PageNr`, `TotalPages`, `TotalElements`, `ContinuationToken`, timing, `PayloadSha256`, `PayloadBytes`, `Failures` |
 | `FetchMetaData` | `Model/FetchMetaData.cs` | Structured metadata JSON (snake_case, selective redaction) | Serializes all dimensions of a fetch for auditability |
@@ -58,7 +58,7 @@ Path segments are sanitized (80-char max, hostile chars replaced, slashes collap
 
 | Vendor | Adapter | Auth | Pagination | Domain | Endpoints |
 |---|---|---|---|---|---|
-| TruckerCloud | `TruckerCloudAdapter` | Username/password token (cached, 401 refresh) | Page-based (`?page=N&size=N`), JSON `totalPages` field | Telematics | 9 (carriers, drivers, vehicles, subscriptions, risk-scores, safety-events, radius-of-operation, gps-miles, vehicle-ignition) |
+| TruckerCloud | `TruckerCloudAdapter` | Username/password token (cached, 401 refresh) | Page-based (`?page=N&size=N`), JSON `totalPages` field | Telematics | 11 (CarriersV4, DriversV4, GpsMilesV4, RadiusOfOperationV4, RiskScoresV4, SafetyEventsV5, SubscriptionsV4, TripsV5, VehicleIgnitionV4, VehiclesV4, ZipCodeMilesV4) |
 | FMCSA | `FmcsaAdapter` | None (public) | Offset-based Socrata (`?$limit=N&$offset=N`), continues until empty response | CarrierInfo | 19 (inspections, census, crash, insurance, history, SMS inputs, etc.) |
 
 ### Endpoint Dependency Patterns
@@ -68,18 +68,18 @@ Some endpoints require prior results as input (fan-out):
 - **CarrierDependent**: Requires carrier codes from a prior carriers load (e.g., TruckerCloud drivers, risk-scores)
 - **CarrierAndTimeWindow**: Requires carrier codes + time window parameters (e.g., TruckerCloud safety-events, gps-miles)
 
-Dependencies are declared via `RequiresIterationList = true` on `EndpointDefinition` and currently resolved in the Host's `EndpointRegistry` via dependency chains.
+Dependencies are declared via `RequiresIterationList = true` on `EndpointDefinition` and resolved by `DependencyResolver` (a static class in the Hosting project), called from `LoadCommandHandler`.
 
 ### Configuration Architecture
 
 Sources loaded in precedence order (lowest to highest):
-1. Embedded `hostDefaults.json` (base defaults baked into binary)
+1. Embedded `sharedDefaults.json` in Hosting library + optional vendor-specific defaults (e.g., `truckerCloudDefaults.json`)
 2. External `appsettings.json` (deploy-time overrides, git-ignored)
 3. Environment variables (e.g., `Loader__MaxDop=8`)
 4. CLI arguments (highest precedence, e.g., `--environment prod`)
 
 Typed settings classes:
-- `LoaderSettings` — Environment, MaxRetries, MinRetryDelayMs, MaxDop, SaveBehavior, SaveWatermark, LookbackDays, Storage, LocalStoragePath
+- `LoaderSettings` — Environment, MaxRetries, MinRetryDelayMs, MaxDop, SaveBehavior, SaveWatermark, Storage, LocalStoragePath
 - `TruckerCloudSettings` — ApiUser, ApiPassword
 - `AzureSettings` — TenantId, ClientId, ClientSecret, AccountName, ContainerName
 
