@@ -13,7 +13,7 @@ Note: `@file.md` means “read `file.md` from repo root” (the actual filename 
 - Do not modify source code.
 - Do not create or edit any repo files except `requirements.md` and (only when explicitly approved by the user) `decisions.md`.
 - The repo-root workflow docs are the only canonical copies; do not duplicate them elsewhere.
-- Change-scoped docs under \changes/<change>/...` may exist, but they are non-canonical; use them only when `CLAUDE.md` Active* pointers reference them.`
+- Change-scoped docs under `changes/<change>/...` may exist, but they are non-canonical; use them only when `CLAUDE.md` Active* pointers reference them.
 - If repo docs are missing or contradictory, do not guess. Ask targeted questions and record unknowns.
 
 ---
