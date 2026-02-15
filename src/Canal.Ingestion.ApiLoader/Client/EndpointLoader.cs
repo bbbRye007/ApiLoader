@@ -33,7 +33,7 @@ public class EndpointLoader : EndpointLoaderBase
 
         if (_definition.RequiresIterationList && (iterationList is null || iterationList.Count == 0))
             throw new ArgumentException(
-                $"Endpoint '{_definition.FriendlyName}' requires an iteration list (e.g., carrier results from a prior Load() call). " +
+                $"Endpoint '{_definition.FriendlyName}' requires an iteration list (e.g., results from a prior Load() call that this endpoint depends on). " +
                 "Pass the output as the iterationList parameter.",
                 nameof(iterationList));
 

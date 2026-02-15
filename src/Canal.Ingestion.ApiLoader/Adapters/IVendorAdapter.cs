@@ -5,11 +5,11 @@ namespace Canal.Ingestion.ApiLoader.Adapters;
 
 public interface IVendorAdapter
 {
-    string IngestionDomain { get; } // ie "Telematics"
-    string VendorName { get; } // ie "TruckerCloud"
-    string BaseUrl { get; } // ie "https://api.truckercloud.com/api/"
+    string IngestionDomain { get; } // e.g., "Telematics", "Compliance" — the business domain this adapter serves
+    string VendorName { get; } // e.g., "TruckerCloud", "Fmcsa" — identifies the vendor for storage paths and logging
+    string BaseUrl { get; } // vendor API root URL, e.g., "https://api.example.com/v1/"
 
-    bool IsExternalSource { get; } // ie "true" because Trucker Cloud Apis are cconsidered "an external source of data"
+    bool IsExternalSource { get; } // true when data originates outside the organization (most vendor APIs)
     HttpClient HttpClient { get; init; }
 
     Uri BuildRequestUri(Request request);

@@ -6,7 +6,7 @@ namespace Canal.Ingestion.ApiLoader.Engine;
 public static class RequestBuilders
 {
     /// <summary>
-    /// Single request, no prior data needed. Used by simple paged endpoints (Carriers, Vehicles, all FMCSA, etc).
+    /// Single request, no prior data needed. Used by simple paged endpoints that don't require an iteration list.
     /// </summary>
     public static List<Request> Simple(IVendorAdapter adapter, EndpointDefinition def, int? pageSize, LoadParameters _)
     {
@@ -14,10 +14,10 @@ public static class RequestBuilders
     }
 
     /// <summary>
-    /// One request per row extracted from prior results. The extractRows function returns query-parameter dictionaries.
-    /// Used by endpoints like Drivers, RiskScores where each carrier gets its own request.
+    /// One request per row extracted from prior results. The extractRows function returns query-parameter dictionaries,
+    /// each producing one seed request.
     /// </summary>
-    public static BuildRequestsDelegate CarrierDependent(Func<List<FetchResult>, List<Dictionary<string, string>>> extractRows)
+    public static BuildRequestsDelegate PerRow(Func<List<FetchResult>, List<Dictionary<string, string>>> extractRows)
     {
         return (adapter, def, pageSize, parameters) =>
         {
@@ -29,9 +29,8 @@ public static class RequestBuilders
 
     /// <summary>
     /// One request per row extracted from prior results, with time window parameters added to each request.
-    /// Used by endpoints like SafetyEvents, GpsMiles, RadiusOfOperation, ZipCodeMiles.
     /// </summary>
-    public static BuildRequestsDelegate CarrierAndTimeWindow(Func<List<FetchResult>, List<Dictionary<string, string>>> extractRows, string startParamName = "startTime", string endParamName = "endTime", string timeFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'")
+    public static BuildRequestsDelegate PerRowWithTimeWindow(Func<List<FetchResult>, List<Dictionary<string, string>>> extractRows, string startParamName = "startTime", string endParamName = "endTime", string timeFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'")
     {
         return (adapter, def, pageSize, parameters) =>
         {
