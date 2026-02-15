@@ -9,6 +9,9 @@ public sealed class LoaderSettings
     public string SaveBehavior { get; set; } = "PerPage";
     public bool SaveWatermark { get; set; } = true;
     public string Storage { get; set; } = "adls";
+    /// <summary>
+    /// Root folder for local file storage. Relative paths resolve against the working directory.
+    /// </summary>
     public string LocalStoragePath { get; set; } = "ApiLoaderOutput";
 
     /// <summary>

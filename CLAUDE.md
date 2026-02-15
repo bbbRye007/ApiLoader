@@ -84,7 +84,7 @@ Each vendor host is a thin `Program.cs` that uses `VendorHostBuilder` (fluent bu
 1. Register the vendor name and adapter factory (`Func<HttpClient, ILoggerFactory, IVendorAdapter>`)
 2. Register the endpoint catalog (`IReadOnlyList<EndpointEntry>`)
 3. Optionally bind vendor-specific settings (e.g., `TruckerCloudSettings`)
-4. Load embedded `hostDefaults.json` defaults
+4. Optionally load an embedded vendor-specific defaults file (e.g., `truckerCloudDefaults.json`); shared defaults (`sharedDefaults.json`) are loaded automatically by the Hosting library
 
 `VendorHostBuilder.RunAsync(args)` builds the configuration stack (embedded defaults → `appsettings.json` → env vars → CLI args), constructs the `System.CommandLine` root command with `load` and `list` subcommands, and invokes it.
 
@@ -125,9 +125,9 @@ CLI options on `load` subcommands are **derived from endpoint metadata** — e.g
 4. Add a `static IReadOnlyList<EndpointEntry> All` property to the endpoints class
 5. Create a new Exe project referencing `Canal.Ingestion.ApiLoader.Hosting` and the adapter project
 6. Write a `Program.cs` (~20-30 lines) using `VendorHostBuilder`
-7. Add embedded `hostDefaults.json` with default configuration
-   - The host `.csproj` must embed the file via `<EmbeddedResource Include="hostDefaults.json" />`
-   - `Program.cs` must load it via `Assembly.GetManifestResourceStream(...)` using the fully-qualified resource name (namespace + filename)
+7. Optionally add an embedded vendor-specific defaults file (e.g., `vendorDefaults.json`) containing only vendor-specific keys; shared defaults (`Loader`, `Azure`, `Logging`) are provided automatically by the Hosting library via `sharedDefaults.json`
+   - The host `.csproj` must embed the file via `<EmbeddedResource Include="vendorDefaults.json" />`
+   - `Program.cs` must load it via `ConfigureAppConfiguration` + `Assembly.GetManifestResourceStream(...)` using the fully-qualified resource name (namespace + filename)
 
 ### Storage Path Convention
 
@@ -140,10 +140,11 @@ Metadata goes in a parallel `metadata/` subdirectory. Watermarks stored as `inge
 ### Configuration
 
 Configuration is layered (last wins):
-1. Embedded `hostDefaults.json` in vendor host assembly
-2. `appsettings.json` in working directory (git-ignored)
-3. Environment variables
-4. CLI arguments (global options like `--environment`, `--storage`)
+1. Embedded `sharedDefaults.json` in the Hosting library (shared Loader, Azure, Logging defaults)
+2. Optional embedded vendor-specific defaults file in the vendor host assembly (e.g., `truckerCloudDefaults.json`)
+3. `appsettings.json` in working directory (git-ignored)
+4. Environment variables
+5. CLI arguments (global options like `--environment`, `--storage`)
 
 Settings are bound to:
 - `LoaderSettings` — shared loader config (environment, retries, DOP, storage backend)

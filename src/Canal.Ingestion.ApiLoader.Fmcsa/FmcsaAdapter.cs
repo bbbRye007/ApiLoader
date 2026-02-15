@@ -56,9 +56,9 @@ public sealed class FmcsaAdapter : VendorAdapterBase, IVendorAdapter
     public override Task ApplyRequestHeadersAsync(HttpRequestMessage httpRequest, Request request, CancellationToken cancellationToken)
     {
         // FMCSA does not require auth.
-        // Default to */* unless the caller wants something else.
+        // Explicitly request JSON so non-JSON error pages surface as 406 rather than being silently accepted.
         httpRequest.Headers.Accept.Clear();
-        httpRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*")); // could change to "application/json" instead of "anything goes"
+        httpRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         foreach (var (k, v) in request.RequestHeaders)
         {
             if (string.IsNullOrWhiteSpace(k)) continue;

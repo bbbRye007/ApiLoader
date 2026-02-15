@@ -59,7 +59,7 @@ public sealed class VendorHostBuilder
     }
 
     /// <summary>
-    /// Optional: adds vendor-specific configuration sources (e.g., an embedded hostDefaults.json).
+    /// Optional: adds vendor-specific configuration sources (e.g., an embedded truckerCloudDefaults.json).
     /// Called during configuration building before external appsettings.json and env vars.
     /// Multiple calls accumulate — each callback is invoked in registration order.
     /// </summary>
