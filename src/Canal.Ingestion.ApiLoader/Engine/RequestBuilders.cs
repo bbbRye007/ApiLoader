@@ -14,8 +14,8 @@ public static class RequestBuilders
     }
 
     /// <summary>
-    /// One request per row extracted from prior results. The extractRows function returns query-parameter dictionaries,
-    /// each producing one seed request.
+    /// One request per row extracted from prior results. The extractRows function returns query-parameter dictionaries;
+    /// each dictionary produces one seed request.
     /// </summary>
     public static BuildRequestsDelegate PerRow(Func<List<FetchResult>, List<Dictionary<string, string>>> extractRows)
     {
