@@ -3,3 +3,7 @@ obj/
 .claude/
 appsettings.json
 comments.md
+ReviewerComments.md
+requirements.md
+design.md
+decisions.md
